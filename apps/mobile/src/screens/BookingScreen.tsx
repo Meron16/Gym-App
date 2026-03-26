@@ -1,24 +1,96 @@
-import React, { useCallback, useRef, useState } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { GlassCard } from "../components/GlassCard";
 import { GlowButton } from "../components/GlowButton";
 import { ScreenContainer } from "../components/ScreenContainer";
 import { colors } from "../theme/tokens";
 import { motion } from "../theme/motion";
-
-const DATES = ["Wed 14", "Thu 15", "Fri 16", "Sat 17", "Sun 18"];
-const SLOTS = ["6:30 AM", "7:30 AM", "9:00 AM", "5:30 PM", "7:00 PM"];
+import { api } from "../services/apiClient";
+import type { BookingSlot } from "../types/app";
 
 const STEPS = ["Date", "Time", "Review", "Done"] as const;
 
 interface BookingScreenProps {
+  gymId?: string;
   onDone?: () => void;
 }
 
-export function BookingScreen({ onDone }: BookingScreenProps) {
+function toISODate(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function formatSlotTime(iso: string) {
+  const dt = new Date(iso);
+  const hh = dt.getUTCHours();
+  const mm = String(dt.getUTCMinutes()).padStart(2, "0");
+  const ampm = hh >= 12 ? "PM" : "AM";
+  const hour12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${hour12}:${mm} ${ampm}`;
+}
+
+export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
   const [step, setStep] = useState(0);
-  const [date, setDate] = useState(DATES[2]);
-  const [slot, setSlot] = useState(SLOTS[1]);
+  const userId = "user_1"; // MVP placeholder until auth is wired
+  const packageId = "weekly"; // MVP placeholder
+
+  const [confirming, setConfirming] = useState(false);
+  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
+  const dateOptions = useMemo(() => {
+    const today = new Date();
+    // Next 5 days
+    return Array.from({ length: 5 }).map((_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const iso = toISODate(d);
+      const label = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+      // Keep short label like "Wed 14" feel
+      const compact = label.replace(/,?\s[A-Za-z]{3}\s/, " ");
+      // If replace fails (different locales), fall back to weekday + day only
+      const fallback = `${d.toLocaleDateString("en-US", { weekday: "short" })} ${d.getDate()}`;
+      return { iso, label: compact || fallback };
+    });
+  }, []);
+
+  const [dateIso, setDateIso] = useState(dateOptions[2]?.iso ?? dateOptions[0]?.iso);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [slots, setSlots] = useState<BookingSlot[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!gymId || !dateIso) return;
+    let mounted = true;
+    (async () => {
+      try {
+        setSlotsError(null);
+        setLoadingSlots(true);
+        const res = await api.getBookingAvailability({ gymId, date: dateIso });
+        if (!mounted) return;
+        setSlots(res.slots);
+        // reset selection if current selection disappears
+        setSelectedSlotId((prev) => {
+          if (!prev) return res.slots.find((s) => s.isAvailable)?.slotId ?? null;
+          return res.slots.some((s) => s.slotId === prev) ? prev : res.slots.find((s) => s.isAvailable)?.slotId ?? null;
+        });
+      } catch (e) {
+        if (mounted) setSlotsError("Could not load availability.");
+      } finally {
+        if (mounted) setLoadingSlots(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [gymId, dateIso]);
+
+  const selectedSlot = useMemo(
+    () => slots.find((s) => s.slotId === selectedSlotId) ?? null,
+    [slots, selectedSlotId],
+  );
+
   const opacity = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
 
@@ -66,7 +138,7 @@ export function BookingScreen({ onDone }: BookingScreenProps) {
   return (
     <ScreenContainer>
       <Text style={styles.title}>Book your session</Text>
-      <Text style={styles.subtitle}>Three calm steps. One confident finish.</Text>
+      <Text style={styles.subtitle}>Minimal steps. Real slots. Instant confirmation.</Text>
 
       <View style={styles.stepRow}>
         {STEPS.map((label, i) => (
@@ -90,11 +162,15 @@ export function BookingScreen({ onDone }: BookingScreenProps) {
           <GlassCard>
             <Text style={styles.section}>Pick a day</Text>
             <View style={styles.dateRow}>
-              {DATES.map((d) => {
-                const active = d === date;
+              {dateOptions.map((d) => {
+                const active = d.iso === dateIso;
                 return (
-                  <Pressable key={d} onPress={() => setDate(d)} style={[styles.dateChip, active && styles.dateChipActive]}>
-                    <Text style={[styles.dateText, active && styles.dateTextActive]}>{d}</Text>
+                  <Pressable
+                    key={d.iso}
+                    onPress={() => setDateIso(d.iso)}
+                    style={[styles.dateChip, active && styles.dateChipActive]}
+                  >
+                    <Text style={[styles.dateText, active && styles.dateTextActive]}>{d.label}</Text>
                   </Pressable>
                 );
               })}
@@ -106,21 +182,39 @@ export function BookingScreen({ onDone }: BookingScreenProps) {
         {step === 1 && (
           <GlassCard>
             <Text style={styles.section}>Choose a time slot</Text>
-            <View style={styles.slotGrid}>
-              {SLOTS.map((s) => {
-                const active = s === slot;
-                return (
-                  <Pressable
-                    key={s}
-                    onPress={() => setSlot(s)}
-                    style={[styles.slot, active && styles.slotActive]}
-                  >
-                    <Text style={[styles.slotText, active && styles.slotTextActive]}>{s}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <GlowButton label="Continue" onPress={next} />
+            {!gymId ? (
+              <Text style={styles.slotEmpty}>Missing gymId.</Text>
+            ) : loadingSlots ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator />
+                <Text style={styles.loadingText}>Loading slots…</Text>
+              </View>
+            ) : slotsError ? (
+              <Text style={styles.slotEmpty}>{slotsError}</Text>
+            ) : (
+              <View style={styles.slotGrid}>
+                {slots.map((s) => {
+                  const active = s.slotId === selectedSlotId;
+                  return (
+                    <Pressable
+                      key={s.slotId}
+                      onPress={() => s.isAvailable && setSelectedSlotId(s.slotId)}
+                      disabled={!s.isAvailable}
+                      style={[styles.slot, active && styles.slotActive, !s.isAvailable && styles.slotDisabled]}
+                    >
+                      <Text style={[styles.slotText, active && styles.slotTextActive, !s.isAvailable && styles.slotTextDisabled]}>
+                        {formatSlotTime(s.startTime)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+            <GlowButton
+              label="Continue"
+              onPress={next}
+              disabled={!selectedSlotId || !selectedSlot?.isAvailable}
+            />
           </GlassCard>
         )}
 
@@ -128,10 +222,35 @@ export function BookingScreen({ onDone }: BookingScreenProps) {
           <GlassCard style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Booking summary</Text>
             <Text style={styles.summaryBody}>
-              Iron Sanctuary • {date} • {slot}
+              {gymId ? gymId.replaceAll("-", " ") : "Gym"} •{" "}
+              {dateOptions.find((d) => d.iso === dateIso)?.label ?? "—"} •{" "}
+              {selectedSlot ? formatSlotTime(selectedSlot.startTime) : "—"}
             </Text>
             <Text style={styles.summaryMeta}>Elite pass • $45 • 1 session</Text>
-            <GlowButton label="Confirm & pay" onPress={next} />
+            <GlowButton
+              label={confirming ? "Confirming…" : "Confirm & pay"}
+              onPress={async () => {
+                if (!gymId || !selectedSlot) return;
+                try {
+                  setConfirmError(null);
+                  setConfirming(true);
+                  const created = await api.createBooking({
+                    gymId,
+                    slotId: selectedSlot.slotId,
+                    userId,
+                    packageId,
+                  });
+                  setBookingId(created.id);
+                  transitionTo(3);
+                } catch {
+                  setConfirmError("Booking failed. Try a different slot.");
+                } finally {
+                  setConfirming(false);
+                }
+              }}
+              disabled={!selectedSlot || confirming}
+            />
+            {confirmError ? <Text style={styles.slotEmpty}>{confirmError}</Text> : null}
           </GlassCard>
         )}
 
@@ -141,7 +260,9 @@ export function BookingScreen({ onDone }: BookingScreenProps) {
               <Text style={styles.checkMark}>✓</Text>
             </View>
             <Text style={styles.successTitle}>You&apos;re in</Text>
-            <Text style={styles.successCopy}>Session locked. We&apos;ll remind you 30 minutes before.</Text>
+            <Text style={styles.successCopy}>
+              {bookingId ? `Booking ${bookingId} locked.` : "Session locked."} We&apos;ll remind you 30 minutes before.
+            </Text>
             <GlowButton
               label="Back to browse"
               onPress={() => {
@@ -216,6 +337,8 @@ const styles = StyleSheet.create({
   },
   slotText: { color: colors.textMuted, fontWeight: "600" },
   slotTextActive: { color: colors.lime },
+  slotDisabled: { opacity: 0.35 },
+  slotTextDisabled: { color: colors.textMuted },
   summaryCard: { gap: 10 },
   summaryTitle: { color: colors.textMuted, textTransform: "uppercase", fontSize: 12 },
   summaryBody: { color: colors.text, fontSize: 22, fontWeight: "800" },
@@ -237,4 +360,7 @@ const styles = StyleSheet.create({
   checkMark: { color: colors.lime, fontSize: 36, fontWeight: "800" },
   successTitle: { color: colors.text, fontSize: 28, fontWeight: "900", textTransform: "uppercase" },
   successCopy: { color: colors.textMuted, textAlign: "center", paddingHorizontal: 12, lineHeight: 20 },
+  slotEmpty: { color: colors.textMuted, fontWeight: "700", marginTop: 10 },
+  loadingRow: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 8 },
+  loadingText: { color: colors.textMuted, fontWeight: "700" },
 });

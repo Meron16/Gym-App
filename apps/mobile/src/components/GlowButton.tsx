@@ -14,6 +14,7 @@ interface GlowButtonProps {
   label: string;
   onPress: () => void;
   variant?: "lime" | "purple";
+  disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -21,6 +22,7 @@ export function GlowButton({
   label,
   onPress,
   variant = "lime",
+  disabled,
   style,
 }: GlowButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -44,12 +46,18 @@ export function GlowButton({
   const isLime = variant === "lime";
 
   return (
-    <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
+    <Pressable
+      onPress={onPress}
+      onPressIn={disabled ? undefined : onPressIn}
+      onPressOut={disabled ? undefined : onPressOut}
+      disabled={disabled}
+    >
       <Animated.View
         style={[
           styles.base,
           isLime ? styles.lime : styles.purple,
           { transform: [{ scale }] },
+          disabled && styles.disabled,
           style,
         ]}
       >
@@ -67,6 +75,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
+  },
+  disabled: {
+    opacity: 0.45,
+    shadowOpacity: 0,
   },
   lime: {
     backgroundColor: colors.lime,
