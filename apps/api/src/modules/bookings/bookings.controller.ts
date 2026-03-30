@@ -1,4 +1,7 @@
-import { Body, Controller, Get, Query, Post } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
+import { Request } from "express";
+import { JwtAuthGuard, JwtUser } from "../auth/jwt-auth.guard";
 import { BookingsService } from "./bookings.service";
 import type {
   AvailabilityResponseDto,
@@ -12,13 +15,18 @@ export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
   @Get("availability")
-  availability(@Query() query: BookingAvailabilityQueryDto): AvailabilityResponseDto {
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
+  availability(@Query() query: BookingAvailabilityQueryDto): Promise<AvailabilityResponseDto> {
     return this.bookingsService.getAvailability(query);
   }
 
   @Post()
-  create(@Body() dto: CreateBookingDto): BookingDto {
-    return this.bookingsService.createBooking(dto);
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 40, ttl: 60000 } })
+  create(
+    @Body() dto: CreateBookingDto,
+    @Req() req: Request & { user: JwtUser },
+  ): Promise<BookingDto> {
+    return this.bookingsService.createBooking(dto, req.user.sub);
   }
 }
-

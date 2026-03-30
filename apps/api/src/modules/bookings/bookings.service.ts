@@ -1,4 +1,12 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { Mutex } from "async-mutex";
+import { PrismaService } from "../../prisma/prisma.service";
+import { EntitlementsService } from "../packages/entitlements.service";
 import {
   AvailabilityResponseDto,
   BookingDto,
@@ -15,7 +23,8 @@ type BookingState = {
   createdAt: string;
 };
 
-const bookings: BookingState[] = [];
+const memoryBookings: BookingState[] = [];
+const slotMutexes = new Map<string, Mutex>();
 
 const gymSlots = ["06:30", "07:30", "09:00", "17:30", "19:00"];
 
@@ -24,64 +33,128 @@ function uid(prefix: string) {
 }
 
 function slotStartEnd(start: string) {
-  // simple ISO-ish representation
   const startTime = `${start}:00`;
   const endTime = start === "19:00" ? "20:00:00" : `${start.split(":")[0]}:${start.split(":")[1]}:00`;
-  // keep endTime stable; UI only displays start slot
   return { startTime, endTime };
 }
 
 function availabilityRemaining(gymId: string, date: string, slotId: string) {
   const seed = `${gymId}|${date}|${slotId}`.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  const remaining = 1 + (seed % 8); // 1..8
-  return remaining;
+  return 1 + (seed % 8);
 }
 
-function filterBookingsForSlot(gymId: string, slotId: string) {
-  return bookings.filter((b) => b.gymId === gymId && b.slotId === slotId && b.status === "confirmed");
+function memoryCountForSlot(gymId: string, slotId: string) {
+  return memoryBookings.filter((b) => b.gymId === gymId && b.slotId === slotId && b.status === "confirmed")
+    .length;
+}
+
+function mutexFor(slotId: string) {
+  if (!slotMutexes.has(slotId)) {
+    slotMutexes.set(slotId, new Mutex());
+  }
+  return slotMutexes.get(slotId)!;
 }
 
 @Injectable()
 export class BookingsService {
-  getAvailability(query: { gymId: string; date: string }): AvailabilityResponseDto {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly entitlements: EntitlementsService,
+    private readonly config: ConfigService,
+  ) {}
+
+  private get capacity(): number {
+    return this.config.get<number>("booking.slotCapacity") ?? 10;
+  }
+
+  async getAvailability(query: { gymId: string; date: string }): Promise<AvailabilityResponseDto> {
     const gymId = query.gymId;
     const date = query.date;
-    const slots: BookingSlotDto[] = gymSlots.map((start) => {
+    const cap = this.capacity;
+
+    const slots: BookingSlotDto[] = [];
+    for (const start of gymSlots) {
       const slotId = `${gymId}_${date}_${start}`;
-      const totalCapacity = 10;
-      const already = filterBookingsForSlot(gymId, slotId).length;
-      const capacityRemaining = Math.max(0, totalCapacity - already);
+      let already = memoryCountForSlot(gymId, slotId);
+      try {
+        already = await this.prisma.booking.count({
+          where: { gymId, slotId, status: "confirmed" },
+        });
+      } catch {
+        /* use memory */
+      }
 
-      // Introduce deterministic variability by adjusting "already" count.
+      const capacityRemaining = Math.max(0, cap - already);
       const desiredRemaining = availabilityRemaining(gymId, date, slotId);
-      const effectiveAlready = Math.max(0, totalCapacity - desiredRemaining);
-      const effectiveRemaining = Math.max(0, totalCapacity - effectiveAlready);
-
-      // Use the min of computed effective remaining and real bookings remaining.
+      const effectiveAlready = Math.max(0, cap - desiredRemaining);
+      const effectiveRemaining = Math.max(0, cap - effectiveAlready);
       const remaining = Math.min(capacityRemaining, effectiveRemaining);
-      return {
+
+      slots.push({
         slotId,
         startTime: `${date}T${slotStartEnd(start).startTime}Z`,
         endTime: `${date}T${slotStartEnd(start).endTime}Z`,
         capacityRemaining: remaining,
         isAvailable: remaining > 0,
-      };
-    });
+      });
+    }
 
     return { gymId, date, slots };
   }
 
-  createBooking(dto: CreateBookingDto): BookingDto {
-    const { gymId, slotId, userId } = dto;
-    if (!gymId || !slotId || !userId) {
+  async createBooking(dto: CreateBookingDto, authenticatedUserId: string): Promise<BookingDto> {
+    const { gymId, slotId, packageId } = dto;
+    if (!gymId || !slotId || !packageId) {
       throw new NotFoundException("Missing required fields");
     }
 
-    const slotBookings = bookings.filter((b) => b.gymId === gymId && b.slotId === slotId && b.status === "confirmed");
-    const totalCapacity = 10;
-    const capacityRemaining = totalCapacity - slotBookings.length;
+    await this.entitlements.assertUserMayBook(authenticatedUserId);
 
-    if (capacityRemaining <= 0) {
+    return mutexFor(slotId).runExclusive(async () => this.createBookingExclusive(dto, authenticatedUserId));
+  }
+
+  private async createBookingExclusive(
+    dto: CreateBookingDto,
+    userId: string,
+  ): Promise<BookingDto> {
+    const { gymId, slotId } = dto;
+    const cap = this.capacity;
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        const already = await tx.booking.count({
+          where: { gymId, slotId, status: "confirmed" },
+        });
+        if (already >= cap) {
+          throw new ConflictException("Slot is full");
+        }
+        const row = await tx.booking.create({
+          data: {
+            userId,
+            gymId,
+            slotId,
+            status: "confirmed",
+          },
+        });
+        return row;
+      });
+
+      return {
+        id: result.id,
+        gymId: result.gymId,
+        slotId: result.slotId,
+        userId: result.userId,
+        status: result.status as BookingDto["status"],
+        createdAt: result.createdAt.toISOString(),
+      };
+    } catch (e) {
+      if (e instanceof ConflictException) {
+        throw e;
+      }
+    }
+
+    const slotBookings = memoryCountForSlot(gymId, slotId);
+    if (slotBookings >= cap) {
       throw new ConflictException("Slot is full");
     }
 
@@ -93,9 +166,7 @@ export class BookingsService {
       status: "confirmed",
       createdAt: new Date().toISOString(),
     };
-
-    bookings.push(newBooking);
+    memoryBookings.push(newBooking);
     return newBooking;
   }
 }
-

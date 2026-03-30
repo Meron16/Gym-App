@@ -1,11 +1,12 @@
 import { Module } from "@nestjs/common";
+import { EntitlementsService } from "./entitlements.service";
 import { PackagesController } from "./packages.controller";
 import { PackagesService } from "./packages.service";
 
 @Module({
   controllers: [PackagesController],
-  providers: [PackagesService],
-  exports: [PackagesService],
+  providers: [PackagesService, EntitlementsService],
+  exports: [PackagesService, EntitlementsService],
 })
 export class PackagesModule {}
 

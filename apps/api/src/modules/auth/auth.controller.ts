@@ -7,7 +7,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post("firebase-login")
-  firebaseLogin(@Body() dto: FirebaseLoginRequestDto) {
+  async firebaseLogin(@Body() dto: FirebaseLoginRequestDto) {
     return this.authService.firebaseLogin(dto);
   }
 }

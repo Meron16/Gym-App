@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { GymDetailDto, GymSearchQueryDto, GymSummaryDto } from "./dto";
 
-const gyms: Array<{
+const mockGyms: Array<{
   id: string;
   name: string;
   location: string;
@@ -71,7 +71,7 @@ const gyms: Array<{
     capacityPercentBase: 58,
     tag: "Performance Lab",
     lat: 8.7526,
-    lng: 38.9610,
+    lng: 38.961,
     address: "Main Blvd, Bishoftu",
     amenities: ["Olympic lifting", "Spin studio", "Physio room"],
     operatingHours: [
@@ -88,10 +88,9 @@ const gyms: Array<{
 ];
 
 function capacityPercentForNow(base: number): number {
-  // Deterministic pseudo-variation (so capacity changes, but is stable per day/hour).
   const d = new Date();
   const t = d.getHours() + d.getDate() * 3;
-  const wiggle = (t % 17) - 8; // -8..+8
+  const wiggle = (t % 17) - 8;
   return Math.max(8, Math.min(98, base + wiggle));
 }
 
@@ -104,15 +103,14 @@ function hashString(s: string): number {
 }
 
 const ETHIOPIA_BBOX: BBox = { south: 3.3, north: 14.9, west: 33.0, east: 48.1 };
-const ADDIS_BBOX: BBox = { south: 8.83, north: 9.10, west: 38.62, east: 38.92 };
-const BISHOFTU_BBOX: BBox = { south: 8.70, north: 8.83, west: 38.90, east: 39.05 };
+const ADDIS_BBOX: BBox = { south: 8.83, north: 9.1, west: 38.62, east: 38.92 };
+const BISHOFTU_BBOX: BBox = { south: 8.7, north: 8.83, west: 38.9, east: 39.05 };
 
 function bboxForLocation(locationQuery: string): BBox {
   const q = locationQuery.toLowerCase();
   if (q.includes("addis")) return ADDIS_BBOX;
   if (q.includes("bishoftu") || q.includes("debre zeit") || q.includes("debrezeit")) return BISHOFTU_BBOX;
   if (q.includes("ethiopia") || q.includes("et")) return ETHIOPIA_BBOX;
-  // Default to Addis for MVP (best density of places).
   return ADDIS_BBOX;
 }
 
@@ -122,29 +120,25 @@ async function fetchOverpassWithRetry(query: string): Promise<any[] | null> {
     "https://overpass.kumi.systems/api/interpreter",
   ];
 
-  // Keep this fast: we must not block the API for long.
-  // Total budget ~10s, then fallback to mock data.
-  for (let attempt = 0; attempt < 1; attempt++) {
-    for (const endpoint of endpoints) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 4500);
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "text/plain; charset=utf-8",
-            "User-Agent": "gym-mvp/1.0 (contact: dev@example.com)",
-          },
-          body: query,
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (!res.ok) continue;
-        const json = (await res.json()) as { elements?: any[] };
-        if (Array.isArray(json.elements)) return json.elements;
-      } catch {
-        // try next endpoint/attempt
-      }
+  for (const endpoint of endpoints) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4500);
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "User-Agent": "gym-mvp/1.0 (contact: dev@example.com)",
+        },
+        body: query,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) continue;
+      const json = (await res.json()) as { elements?: any[] };
+      if (Array.isArray(json.elements)) return json.elements;
+    } catch {
+      // next
     }
   }
   return null;
@@ -209,16 +203,89 @@ async function fetchFitnessPlacesFromOSM(bbox: BBox): Promise<
   }));
 }
 
+const DEFAULT_AMENITIES = ["Cardio", "Free weights", "Showers", "Lockers"];
+const DEFAULT_HOURS: { day: string; open: string; close: string }[] = [
+  { day: "Mon", open: "06:00", close: "22:00" },
+  { day: "Tue", open: "06:00", close: "22:00" },
+  { day: "Wed", open: "06:00", close: "22:00" },
+  { day: "Thu", open: "06:00", close: "22:00" },
+  { day: "Fri", open: "06:00", close: "23:00" },
+  { day: "Sat", open: "08:00", close: "20:00" },
+  { day: "Sun", open: "09:00", close: "18:00" },
+];
+const DEFAULT_PHOTO =
+  "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80";
+
 @Injectable()
 export class GymsService {
+  private readonly detailById = new Map<string, GymDetailDto>();
+  private readonly capacityBaseById = new Map<string, number>();
+
+  private rememberOsmSummary(s: GymSummaryDto, capacityBase: number) {
+    this.capacityBaseById.set(s.id, capacityBase);
+    this.detailById.set(s.id, {
+      ...s,
+      capacityPercent: `${capacityPercentForNow(capacityBase)}%` as `${number}%`,
+      address: s.location,
+      amenities: [...DEFAULT_AMENITIES],
+      operatingHours: DEFAULT_HOURS.map((h) => ({ ...h })),
+      photos: [{ url: DEFAULT_PHOTO }],
+    });
+  }
+
+  private detailFromCatalogRow(g: (typeof mockGyms)[0]): GymDetailDto {
+    const cap = capacityPercentForNow(g.capacityPercentBase);
+    return {
+      id: g.id,
+      name: g.name,
+      location: g.location,
+      rating: g.rating,
+      priceFrom: g.priceFrom,
+      lat: g.lat,
+      lng: g.lng,
+      capacityPercent: `${cap}%` as `${number}%`,
+      tag: g.tag,
+      address: g.address,
+      amenities: g.amenities,
+      operatingHours: g.operatingHours,
+      photos: g.photos,
+    };
+  }
+
+  private syntheticOsmDetail(id: string): GymDetailDto {
+    const base = 35 + (hashString(id) % 60);
+    const lat = 8.9806 + (hashString(`${id}lat`) % 100) / 5000;
+    const lng = 38.7578 + (hashString(`${id}lng`) % 100) / 5000;
+    const summary: GymSummaryDto = {
+      id,
+      name: "Fitness venue",
+      location: "OpenStreetMap · Ethiopia",
+      rating: 4.2 + (hashString(id) % 40) / 100,
+      priceFrom: "$—",
+      lat,
+      lng,
+      capacityPercent: `${capacityPercentForNow(base)}%` as `${number}%`,
+      tag: "Fitness",
+    };
+    this.rememberOsmSummary(summary, base);
+    return this.materializeDetail(id);
+  }
+
+  private materializeDetail(id: string): GymDetailDto {
+    const base = this.capacityBaseById.get(id) ?? 45;
+    const row = this.detailById.get(id);
+    if (!row) return this.detailFromCatalogRow(mockGyms[0]);
+    return {
+      ...row,
+      capacityPercent: `${capacityPercentForNow(base)}%` as `${number}%`,
+    };
+  }
+
   async search(query: GymSearchQueryDto): Promise<GymSummaryDto[]> {
     const q = (query?.q ?? "").toLowerCase().trim();
     const location = (query?.location ?? "").toLowerCase().trim();
     const facility = (query?.facility ?? "").toLowerCase().trim();
 
-    // MVP “real places” mode:
-    // 1) OpenStreetMap/Overpass (no key)
-    // If anything fails, we fallback to deterministic mock data.
     try {
       const locForBBox = location ? location : "Addis Ababa, Ethiopia";
       const bbox = bboxForLocation(locForBBox);
@@ -246,27 +313,28 @@ export class GymsService {
           const cap = capacityPercentForNow(base);
           const tag = tags["leisure"] ?? tags["amenity"] ?? tags["sport"] ?? "Fitness";
 
-          return {
+          const summary: GymSummaryDto = {
             id: `osm_${el.type}_${el.id}`,
             name,
             location: address,
-            rating: 4.2 + ((hashString(name) % 40) / 100), // 4.2..4.6
+            rating: 4.2 + (hashString(name) % 40) / 100,
             priceFrom: "$—",
             lat,
             lng,
             capacityPercent: `${cap}%` as `${number}%`,
             tag,
-          } satisfies GymSummaryDto;
+          };
+          this.rememberOsmSummary(summary, base);
+          return summary;
         })
         .filter(Boolean) as GymSummaryDto[];
 
       if (mapped.length) return mapped.sort((a, b) => b.rating - a.rating);
     } catch {
-      // ignore and fallback
+      // fallback
     }
 
-    // Fallback: deterministic mock data (always works).
-    const filtered = gyms.filter((g) => {
+    const filtered = mockGyms.filter((g) => {
       const matchesQ = !q || g.name.toLowerCase().includes(q) || g.tag.toLowerCase().includes(q);
       const matchesLoc = !location || g.location.toLowerCase().includes(location);
       const matchesFac = !facility || g.amenities.some((a) => a.toLowerCase().includes(facility));
@@ -274,40 +342,40 @@ export class GymsService {
     });
 
     return filtered
-      .map((g) => ({
-        id: g.id,
-        name: g.name,
-        location: g.location,
-        rating: g.rating,
-        priceFrom: g.priceFrom,
-        lat: g.lat,
-        lng: g.lng,
-        capacityPercent: `${capacityPercentForNow(g.capacityPercentBase)}%` as `${number}%`,
-        tag: g.tag,
-      }))
+      .map((g) => {
+        const cap = capacityPercentForNow(g.capacityPercentBase);
+        const summary: GymSummaryDto = {
+          id: g.id,
+          name: g.name,
+          location: g.location,
+          rating: g.rating,
+          priceFrom: g.priceFrom,
+          lat: g.lat,
+          lng: g.lng,
+          capacityPercent: `${cap}%` as `${number}%`,
+          tag: g.tag,
+        };
+        this.capacityBaseById.set(g.id, g.capacityPercentBase);
+        this.detailById.set(g.id, this.detailFromCatalogRow(g));
+        return summary;
+      })
       .sort((a, b) => b.rating - a.rating);
   }
 
   detail(id: string): GymDetailDto {
-    const gym = gyms.find((g) => g.id === id);
-    const fallback = gyms[0];
-    const selected = gym ?? fallback;
+    const catalogHit = mockGyms.find((g) => g.id === id);
+    if (catalogHit) {
+      return this.detailFromCatalogRow(catalogHit);
+    }
 
-    return {
-      id: selected.id,
-      name: selected.name,
-      location: selected.location,
-      rating: selected.rating,
-      priceFrom: selected.priceFrom,
-      lat: selected.lat,
-      lng: selected.lng,
-      capacityPercent: `${capacityPercentForNow(selected.capacityPercentBase)}%` as `${number}%`,
-      tag: selected.tag,
-      address: selected.address,
-      amenities: selected.amenities,
-      operatingHours: selected.operatingHours,
-      photos: selected.photos,
-    };
+    if (this.detailById.has(id)) {
+      return this.materializeDetail(id);
+    }
+
+    if (/^osm_(node|way|relation)_\d+$/.test(id)) {
+      return this.syntheticOsmDetail(id);
+    }
+
+    return this.detailFromCatalogRow(mockGyms[0]);
   }
 }
-

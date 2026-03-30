@@ -12,6 +12,13 @@ export interface GymItem {
   tag: string;
 }
 
+export interface GymDetail extends GymItem {
+  address: string;
+  amenities: string[];
+  operatingHours: { day: string; open: string; close: string }[];
+  photos: { url: string }[];
+}
+
 export interface BookingSlot {
   slotId: string;
   startTime: string;

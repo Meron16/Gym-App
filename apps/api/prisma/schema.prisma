@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  user
+  operator
+  admin
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String?  @unique
+  firebaseUid String?  @unique
+  role        UserRole @default(user)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bookings         Booking[]
+  subscriptions    Subscription[]
+  notificationTokens NotificationToken[]
+}
+
+model Gym {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  lat       Float
+  lng       Float
+  osmType   String?
+  osmId     String?
+  createdAt DateTime @default(now())
+}
+
+model Booking {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gymId     String
+  slotId    String
+  status    String
+  createdAt DateTime @default(now())
+}
+
+model Package {
+  id          String @id @default(cuid())
+  name        String
+  priceCents  Int
+  billing     String
+  maxSessions Int    @default(999)
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packageId String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model PaymentRecord {
+  id          String   @id @default(cuid())
+  userId      String
+  amountCents Int
+  provider    String
+  externalId  String?
+  createdAt   DateTime @default(now())
+}
+
+model NotificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String
+  platform  String?
+  createdAt DateTime @default(now())
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  channel   String
+  payload   String
+  createdAt DateTime @default(now())
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String?
+  props     String?
+  createdAt DateTime @default(now())
+}

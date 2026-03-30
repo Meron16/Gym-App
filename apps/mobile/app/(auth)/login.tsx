@@ -6,7 +6,7 @@ export default function Login() {
   const router = useRouter();
   return (
     <LoginScreen
-      onLogin={() => router.replace("/(app)/home")}
+      onLogin={() => router.replace("/(app)/(tabs)/home")}
       onGoSignup={() => router.push("/(auth)/signup")}
     />
   );

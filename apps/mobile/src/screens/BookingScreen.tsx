@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { EmptyState } from "../components/EmptyState";
 import { GlassCard } from "../components/GlassCard";
 import { GlowButton } from "../components/GlowButton";
 import { ScreenContainer } from "../components/ScreenContainer";
+import { SlotsGridSkeleton } from "../components/SkeletonShimmer";
 import { colors } from "../theme/tokens";
 import { motion } from "../theme/motion";
 import { api } from "../services/apiClient";
@@ -31,8 +33,7 @@ function formatSlotTime(iso: string) {
 
 export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
   const [step, setStep] = useState(0);
-  const userId = "user_1"; // MVP placeholder until auth is wired
-  const packageId = "weekly"; // MVP placeholder
+  const packageId = "weekly";
 
   const [confirming, setConfirming] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
@@ -185,12 +186,28 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
             {!gymId ? (
               <Text style={styles.slotEmpty}>Missing gymId.</Text>
             ) : loadingSlots ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator />
-                <Text style={styles.loadingText}>Loading slots…</Text>
-              </View>
+              <SlotsGridSkeleton />
             ) : slotsError ? (
-              <Text style={styles.slotEmpty}>{slotsError}</Text>
+              <EmptyState
+                title="Slots unavailable"
+                description={slotsError}
+                actionLabel="Retry"
+                onAction={() => {
+                  if (!gymId || !dateIso) return;
+                  void (async () => {
+                    try {
+                      setSlotsError(null);
+                      setLoadingSlots(true);
+                      const res = await api.getBookingAvailability({ gymId, date: dateIso });
+                      setSlots(res.slots);
+                    } catch {
+                      setSlotsError("Could not load availability.");
+                    } finally {
+                      setLoadingSlots(false);
+                    }
+                  })();
+                }}
+              />
             ) : (
               <View style={styles.slotGrid}>
                 {slots.map((s) => {
@@ -237,7 +254,6 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
                   const created = await api.createBooking({
                     gymId,
                     slotId: selectedSlot.slotId,
-                    userId,
                     packageId,
                   });
                   setBookingId(created.id);
@@ -361,6 +377,4 @@ const styles = StyleSheet.create({
   successTitle: { color: colors.text, fontSize: 28, fontWeight: "900", textTransform: "uppercase" },
   successCopy: { color: colors.textMuted, textAlign: "center", paddingHorizontal: 12, lineHeight: 20 },
   slotEmpty: { color: colors.textMuted, fontWeight: "700", marginTop: 10 },
-  loadingRow: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 8 },
-  loadingText: { color: colors.textMuted, fontWeight: "700" },
 });

@@ -4,6 +4,11 @@ import { OnboardingScreen } from "../../src/screens/OnboardingScreen";
 
 export default function Onboarding() {
   const router = useRouter();
-  return <OnboardingScreen onNext={() => router.replace("/(app)/home")} />;
+  return (
+    <OnboardingScreen
+      onNext={() => router.replace("/(app)/(tabs)/home")}
+      onSkip={() => router.replace("/(app)/(tabs)/home")}
+    />
+  );
 }
 

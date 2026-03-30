@@ -1,8 +1,10 @@
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { GlowButton } from "../components/GlowButton";
 import { InputField } from "../components/InputField";
 import { ScreenContainer } from "../components/ScreenContainer";
+import { api } from "../services/apiClient";
+import { setSession } from "../services/sessionStore";
 import { colors } from "../theme/tokens";
 
 interface LoginScreenProps {
@@ -11,6 +13,25 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onLogin, onGoSignup }: LoginScreenProps) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const devIdToken = process.env.EXPO_PUBLIC_DEV_FIREBASE_ID_TOKEN ?? "dev";
+
+  const handleLogin = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await api.authFirebaseLogin(devIdToken);
+      await setSession(res.accessToken, res.profile.id);
+      onLogin();
+    } catch {
+      setError("Could not sign in. Start the API (apps/api) and check EXPO_PUBLIC_API_URL.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <ScreenContainer padForTabBar={false}>
       <View style={styles.brandWrap}>
@@ -23,7 +44,13 @@ export function LoginScreen({ onLogin, onGoSignup }: LoginScreenProps) {
         <Pressable hitSlop={8}>
           <Text style={styles.forgot}>Forgot password?</Text>
         </Pressable>
-        <GlowButton label="Log In" onPress={onLogin} />
+        {error ? <Text style={styles.err}>{error}</Text> : null}
+        <GlowButton
+          label={loading ? "Signing in…" : "Log In"}
+          onPress={() => void handleLogin()}
+          disabled={loading}
+        />
+        {loading ? <ActivityIndicator color={colors.lime} /> : null}
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
           <Text style={styles.dividerText}>Connect with</Text>
@@ -82,4 +109,5 @@ const styles = StyleSheet.create({
   footer: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
   footerMuted: { color: colors.textMuted },
   footerLime: { color: colors.lime, fontWeight: "800" },
+  err: { color: colors.purple, fontWeight: "700", fontSize: 13 },
 });

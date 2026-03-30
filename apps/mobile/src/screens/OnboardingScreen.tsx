@@ -6,6 +6,7 @@ import { colors } from "../theme/tokens";
 
 interface OnboardingScreenProps {
   onNext: () => void;
+  onSkip?: () => void;
 }
 
 const goals = [
@@ -15,7 +16,7 @@ const goals = [
   "Weight Loss",
 ];
 
-export function OnboardingScreen({ onNext }: OnboardingScreenProps) {
+export function OnboardingScreen({ onNext, onSkip }: OnboardingScreenProps) {
   const [selected, setSelected] = useState<string[]>(["Build Muscle"]);
 
   const toggleGoal = (goal: string) => {
@@ -24,6 +25,11 @@ export function OnboardingScreen({ onNext }: OnboardingScreenProps) {
 
   return (
     <ScreenContainer padForTabBar={false}>
+      {onSkip ? (
+        <Pressable onPress={onSkip} hitSlop={12} style={styles.skipRow}>
+          <Text style={styles.skip}>Skip for now</Text>
+        </Pressable>
+      ) : null}
       <Text style={styles.step}>STEP 1 OF 4</Text>
       <Text style={styles.title}>What drives your daily motion?</Text>
       <Text style={styles.subtitle}>Pick up to two goals to personalize your training.</Text>
@@ -49,6 +55,8 @@ export function OnboardingScreen({ onNext }: OnboardingScreenProps) {
 }
 
 const styles = StyleSheet.create({
+  skipRow: { alignSelf: "flex-end", marginBottom: 8 },
+  skip: { color: colors.textMuted, fontWeight: "700", fontSize: 13, textDecorationLine: "underline" },
   step: { color: colors.purple, letterSpacing: 2, fontSize: 12, fontWeight: "700" },
   title: { color: colors.text, fontSize: 37, fontWeight: "800", lineHeight: 42 },
   subtitle: { color: colors.textMuted, fontSize: 15, marginBottom: 6 },

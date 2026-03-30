@@ -1,12 +1,31 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { ConfigService } from "@nestjs/config";
+import { NestFactory } from "@nestjs/core";
+import * as Sentry from "@sentry/node";
+import { AppModule } from "./app.module";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  if (process.env.SENTRY_DSN) {
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      tracesSampleRate: 0.1,
+    });
+  }
+
+  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const config = app.get(ConfigService);
+
+  const corsOrigins = (process.env.CORS_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: true,
+    origin: corsOrigins.length ? corsOrigins : true,
     credentials: true,
   });
-  await app.listen(process.env.PORT ?? 3000);
+
+  const port = config.get<number>("port") ?? 3001;
+  await app.listen(port);
 }
+
 bootstrap();

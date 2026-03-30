@@ -1,6 +1,6 @@
 export interface BookingSlotDto {
   slotId: string;
-  startTime: string; // ISO-ish
+  startTime: string;
   endTime: string;
   capacityRemaining: number;
   isAvailable: boolean;
@@ -8,7 +8,7 @@ export interface BookingSlotDto {
 
 export interface BookingAvailabilityQueryDto {
   gymId: string;
-  date: string; // YYYY-MM-DD
+  date: string;
 }
 
 export interface AvailabilityResponseDto {
@@ -20,7 +20,8 @@ export interface AvailabilityResponseDto {
 export interface CreateBookingDto {
   gymId: string;
   slotId: string;
-  userId: string;
+  /** Ignored when using JWT — server uses authenticated user id */
+  userId?: string;
   packageId: string;
 }
 
@@ -34,4 +35,3 @@ export interface BookingDto {
   status: BookingStatus;
   createdAt: string;
 }
-

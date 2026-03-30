@@ -1,31 +1,17 @@
 import React from "react";
-import { Tabs } from "expo-router";
-import { colors } from "../../src/theme/tokens";
+import { Stack } from "expo-router";
 
-export default function AppLayout() {
+export default function AppStackLayout() {
   return (
-    <Tabs
+    <Stack
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.bottomNav,
-          borderTopColor: colors.border,
-          height: 64,
-        },
-        tabBarActiveTintColor: colors.lime,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "700",
-          letterSpacing: 0.4,
-        },
+        animation: "slide_from_right",
+        contentStyle: { backgroundColor: "#090A11" },
       }}
     >
-      <Tabs.Screen name="home" options={{ title: "HOME" }} />
-      <Tabs.Screen name="browse" options={{ title: "BROWSE" }} />
-      <Tabs.Screen name="booking" options={{ title: "BOOK" }} />
-      <Tabs.Screen name="activity" options={{ title: "PULSE" }} />
-    </Tabs>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="gym/[id]" />
+    </Stack>
   );
 }
-
