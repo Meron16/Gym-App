@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { Request } from "express";
 import { JwtAuthGuard, JwtUser } from "../auth/jwt-auth.guard";
@@ -20,6 +30,13 @@ export class BookingsController {
     return this.bookingsService.getAvailability(query);
   }
 
+  @Get("my")
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 80, ttl: 60000 } })
+  myBookings(@Req() req: Request & { user: JwtUser }): Promise<BookingDto[]> {
+    return this.bookingsService.listMyBookings(req.user.sub);
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 40, ttl: 60000 } })
@@ -28,5 +45,15 @@ export class BookingsController {
     @Req() req: Request & { user: JwtUser },
   ): Promise<BookingDto> {
     return this.bookingsService.createBooking(dto, req.user.sub);
+  }
+
+  @Patch(":id/cancel")
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 40, ttl: 60000 } })
+  cancel(
+    @Param("id") bookingId: string,
+    @Req() req: Request & { user: JwtUser },
+  ): Promise<BookingDto> {
+    return this.bookingsService.cancelBooking(bookingId, req.user.sub);
   }
 }

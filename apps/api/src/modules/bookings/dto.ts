@@ -20,12 +20,12 @@ export interface AvailabilityResponseDto {
 export interface CreateBookingDto {
   gymId: string;
   slotId: string;
-  /** Ignored when using JWT — server uses authenticated user id */
+  /** Ignored when using JWT - server uses authenticated user id */
   userId?: string;
   packageId: string;
 }
 
-export type BookingStatus = "confirmed" | "cancelled";
+export type BookingStatus = "pending" | "confirmed" | "cancelled" | "completed";
 
 export interface BookingDto {
   id: string;

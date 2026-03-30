@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -19,7 +20,7 @@ type BookingState = {
   gymId: string;
   slotId: string;
   userId: string;
-  status: "confirmed" | "cancelled";
+  status: "pending" | "confirmed" | "cancelled" | "completed";
   createdAt: string;
 };
 
@@ -81,7 +82,7 @@ export class BookingsService {
           where: { gymId, slotId, status: "confirmed" },
         });
       } catch {
-        /* use memory */
+        /* use memory fallback */
       }
 
       const capacityRemaining = Math.max(0, cap - already);
@@ -109,8 +110,66 @@ export class BookingsService {
     }
 
     await this.entitlements.assertUserMayBook(authenticatedUserId);
-
     return mutexFor(slotId).runExclusive(async () => this.createBookingExclusive(dto, authenticatedUserId));
+  }
+
+  async listMyBookings(userId: string): Promise<BookingDto[]> {
+    try {
+      const rows = await this.prisma.booking.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        gymId: r.gymId,
+        slotId: r.slotId,
+        userId: r.userId,
+        status: r.status as BookingDto["status"],
+        createdAt: r.createdAt.toISOString(),
+      }));
+    } catch {
+      return memoryBookings
+        .filter((b) => b.userId === userId)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    }
+  }
+
+  async cancelBooking(bookingId: string, userId: string): Promise<BookingDto> {
+    try {
+      const row = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+      if (!row) {
+        throw new NotFoundException("Booking not found");
+      }
+      if (row.userId !== userId) {
+        throw new ForbiddenException("Not allowed to cancel this booking");
+      }
+      const updated = await this.prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: "cancelled" },
+      });
+      return {
+        id: updated.id,
+        gymId: updated.gymId,
+        slotId: updated.slotId,
+        userId: updated.userId,
+        status: updated.status as BookingDto["status"],
+        createdAt: updated.createdAt.toISOString(),
+      };
+    } catch (e) {
+      if (e instanceof NotFoundException || e instanceof ForbiddenException) {
+        throw e;
+      }
+    }
+
+    const hit = memoryBookings.find((b) => b.id === bookingId);
+    if (!hit) {
+      throw new NotFoundException("Booking not found");
+    }
+    if (hit.userId !== userId) {
+      throw new ForbiddenException("Not allowed to cancel this booking");
+    }
+    hit.status = "cancelled";
+    return hit;
   }
 
   private async createBookingExclusive(
