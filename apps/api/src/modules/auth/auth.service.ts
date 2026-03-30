@@ -6,6 +6,8 @@ import { FirebaseAdminService } from "./firebase-admin.service";
 import { AuthProfileDto, FirebaseLoginRequestDto, FirebaseLoginResponseDto } from "./dto";
 
 const DEV_USER_ID = "user_dev_1";
+const DEV_OPERATOR_ID = "operator_dev_1";
+const DEV_ADMIN_ID = "admin_dev_1";
 
 @Injectable()
 export class AuthService {
@@ -43,12 +45,29 @@ export class AuthService {
     }
 
     const allowDev = this.config.get<boolean>("auth.devAllowPlaceholder");
-    const placeholders = ["dev", "placeholder", "test"];
-    if (allowDev && placeholders.includes(token.toLowerCase())) {
-      await this.ensureDevUser();
-      const accessToken = this.signAppJwt(DEV_USER_ID, "user");
-      const profile: AuthProfileDto = { id: DEV_USER_ID, role: "user" };
-      return { accessToken, profile };
+    if (allowDev) {
+      const lowered = token.toLowerCase();
+      if (["admin", "dev-admin"].includes(lowered)) {
+        await this.ensureDevUser(DEV_ADMIN_ID, "admin");
+        return {
+          accessToken: this.signAppJwt(DEV_ADMIN_ID, "admin"),
+          profile: { id: DEV_ADMIN_ID, role: "admin" },
+        };
+      }
+      if (["operator", "dev-operator"].includes(lowered)) {
+        await this.ensureDevUser(DEV_OPERATOR_ID, "operator");
+        return {
+          accessToken: this.signAppJwt(DEV_OPERATOR_ID, "operator"),
+          profile: { id: DEV_OPERATOR_ID, role: "operator" },
+        };
+      }
+      if (["dev", "placeholder", "test", "user", "dev-user"].includes(lowered)) {
+        await this.ensureDevUser(DEV_USER_ID, "user");
+        return {
+          accessToken: this.signAppJwt(DEV_USER_ID, "user"),
+          profile: { id: DEV_USER_ID, role: "user" },
+        };
+      }
     }
 
     throw new UnauthorizedException(
@@ -82,12 +101,12 @@ export class AuthService {
     }
   }
 
-  private async ensureDevUser() {
+  private async ensureDevUser(userId: string, role: "user" | "operator" | "admin") {
     try {
       await this.prisma.user.upsert({
-        where: { id: DEV_USER_ID },
-        create: { id: DEV_USER_ID, role: "user" },
-        update: {},
+        where: { id: userId },
+        create: { id: userId, role },
+        update: { role },
       });
     } catch {
       /* DB optional */

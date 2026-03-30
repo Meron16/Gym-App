@@ -1,20 +1,26 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Kinetic Gym",
+    "slug": "kinetic-gym",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "scheme": "kinetic",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#090A11"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kinetic.gym"
     },
     "android": {
+      "package": "com.kinetic.gym",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -29,6 +35,11 @@
     "plugins": [
       "expo-router"
     ],
-    "scheme": "kinetic"
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "271908ad-fb03-44bb-a21a-47d3fdd5b411"
+      }
+    }
   }
 }
