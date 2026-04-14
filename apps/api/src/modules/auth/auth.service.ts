@@ -1,9 +1,22 @@
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import * as bcrypt from "bcryptjs";
 import * as jwt from "jsonwebtoken";
 import { PrismaService } from "../../prisma/prisma.service";
 import { FirebaseAdminService } from "./firebase-admin.service";
-import { AuthProfileDto, FirebaseLoginRequestDto, FirebaseLoginResponseDto } from "./dto";
+import {
+  AuthProfileDto,
+  FirebaseLoginRequestDto,
+  FirebaseLoginResponseDto,
+  LoginRequestDto,
+  RegisterRequestDto,
+} from "./dto";
 
 const DEV_USER_ID = "user_dev_1";
 const DEV_OPERATOR_ID = "operator_dev_1";
@@ -18,6 +31,67 @@ export class AuthService {
     private readonly firebase: FirebaseAdminService,
     private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * Email/password registration — stores user in Postgres (no Firebase required).
+   */
+  async register(dto: RegisterRequestDto): Promise<FirebaseLoginResponseDto> {
+    const email = dto.email.trim().toLowerCase();
+    if (!email || !dto.password) {
+      throw new BadRequestException("Email and password are required");
+    }
+    if (dto.password.length < 6) {
+      throw new BadRequestException("Password must be at least 6 characters");
+    }
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException("An account with this email already exists");
+    }
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const phoneDigits = dto.phone?.replace(/\D/g, "").slice(0, 20) || null;
+    const displayName = dto.fullName?.trim() || null;
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        phone: phoneDigits || null,
+        displayName,
+        role: "user",
+      },
+    });
+    const accessToken = this.signAppJwt(user.id, user.role);
+    const profile: AuthProfileDto = {
+      id: user.id,
+      role: user.role as AuthProfileDto["role"],
+      email: user.email ?? undefined,
+    };
+    return { accessToken, profile };
+  }
+
+  /**
+   * Email/password login for users created via register() (passwordHash set).
+   */
+  async login(dto: LoginRequestDto): Promise<FirebaseLoginResponseDto> {
+    const email = dto.email.trim().toLowerCase();
+    if (!email || !dto.password) {
+      throw new BadRequestException("Email and password are required");
+    }
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user?.passwordHash) {
+      throw new UnauthorizedException("Invalid email or password");
+    }
+    const ok = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException("Invalid email or password");
+    }
+    const accessToken = this.signAppJwt(user.id, user.role);
+    const profile: AuthProfileDto = {
+      id: user.id,
+      role: user.role as AuthProfileDto["role"],
+      email: user.email ?? undefined,
+    };
+    return { accessToken, profile };
+  }
 
   async firebaseLogin(dto: FirebaseLoginRequestDto): Promise<FirebaseLoginResponseDto> {
     const token = (dto.idToken ?? "").trim();
@@ -88,28 +162,19 @@ export class AuthService {
     firebaseUid: string,
     email?: string,
   ): Promise<{ id: string; role: string }> {
-    try {
-      const user = await this.prisma.user.upsert({
-        where: { firebaseUid },
-        create: { firebaseUid, email: email ?? null, role: "user" },
-        update: { email: email ?? undefined },
-      });
-      return { id: user.id, role: user.role };
-    } catch (e) {
-      this.log.warn(`Prisma user upsert failed: ${(e as Error).message}`);
-      return { id: `firebase_${firebaseUid}`, role: "user" };
-    }
+    const user = await this.prisma.user.upsert({
+      where: { firebaseUid },
+      create: { firebaseUid, email: email ?? null, role: "user" },
+      update: { email: email ?? undefined },
+    });
+    return { id: user.id, role: user.role };
   }
 
   private async ensureDevUser(userId: string, role: "user" | "operator" | "admin") {
-    try {
-      await this.prisma.user.upsert({
-        where: { id: userId },
-        create: { id: userId, role },
-        update: { role },
-      });
-    } catch {
-      /* DB optional */
-    }
+    await this.prisma.user.upsert({
+      where: { id: userId },
+      create: { id: userId, role },
+      update: { role },
+    });
   }
 }

@@ -7,8 +7,9 @@ import { ScreenContainer } from "../components/ScreenContainer";
 import { SlotsGridSkeleton } from "../components/SkeletonShimmer";
 import { colors } from "../theme/tokens";
 import { motion } from "../theme/motion";
+import { track } from "../services/analytics";
 import { api } from "../services/apiClient";
-import type { BookingSlot } from "../types/app";
+import type { BookingSlot, Package } from "../types/app";
 
 const STEPS = ["Date", "Time", "Review", "Done"] as const;
 
@@ -33,7 +34,8 @@ function formatSlotTime(iso: string) {
 
 export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
   const [step, setStep] = useState(0);
-  const packageId = "weekly";
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
 
   const [confirming, setConfirming] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
@@ -60,6 +62,26 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
   const [slots, setSlots] = useState<BookingSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      try {
+        const res = await api.getMyPackages().catch(() => api.getPackages());
+        if (!mounted) return;
+        setPackages(res.packages);
+        setSelectedPackageId(res.activePackageId ?? res.packages[0]?.id ?? null);
+      } catch {
+        if (mounted) {
+          setPackages([]);
+          setSelectedPackageId(null);
+        }
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!gymId || !dateIso) return;
@@ -161,7 +183,29 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
       <Animated.View style={{ opacity, transform: [{ translateY }] }}>
         {step === 0 && (
           <GlassCard>
-            <Text style={styles.section}>Pick a day</Text>
+            <Text style={styles.section}>Membership plan</Text>
+            {packages.length === 0 ? (
+              <Text style={styles.slotEmpty}>No plans in catalog. Seed packages on the API.</Text>
+            ) : (
+              <View style={styles.pkgRow}>
+                {packages.map((p) => {
+                  const active = p.id === selectedPackageId;
+                  return (
+                    <Pressable
+                      key={p.id}
+                      onPress={() => setSelectedPackageId(p.id)}
+                      style={[styles.pkgChip, active && styles.pkgChipActive]}
+                    >
+                      <Text style={[styles.pkgName, active && styles.pkgNameActive]} numberOfLines={1}>
+                        {p.name}
+                      </Text>
+                      <Text style={[styles.pkgPrice, active && styles.pkgPriceActive]}>{p.price}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+            <Text style={[styles.section, { marginTop: 14 }]}>Pick a day</Text>
             <View style={styles.dateRow}>
               {dateOptions.map((d) => {
                 const active = d.iso === dateIso;
@@ -176,7 +220,7 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
                 );
               })}
             </View>
-            <GlowButton label="Continue" onPress={next} />
+            <GlowButton label="Continue" onPress={next} disabled={!selectedPackageId} />
           </GlassCard>
         )}
 
@@ -243,20 +287,28 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
               {dateOptions.find((d) => d.iso === dateIso)?.label ?? "—"} •{" "}
               {selectedSlot ? formatSlotTime(selectedSlot.startTime) : "—"}
             </Text>
-            <Text style={styles.summaryMeta}>Elite pass • $45 • 1 session</Text>
+            <Text style={styles.summaryMeta}>
+              {packages.find((p) => p.id === selectedPackageId)?.name ?? "Plan"} •{" "}
+              {packages.find((p) => p.id === selectedPackageId)?.price ?? "—"} • 1 session
+            </Text>
             <GlowButton
               label={confirming ? "Confirming…" : "Confirm & pay"}
               onPress={async () => {
-                if (!gymId || !selectedSlot) return;
+                if (!gymId || !selectedSlot || !selectedPackageId) return;
                 try {
                   setConfirmError(null);
                   setConfirming(true);
                   const created = await api.createBooking({
                     gymId,
                     slotId: selectedSlot.slotId,
-                    packageId,
+                    packageId: selectedPackageId,
                   });
                   setBookingId(created.id);
+                  track("booking_confirmed", {
+                    gym_id: gymId,
+                    package_id: selectedPackageId,
+                    booking_id: created.id,
+                  });
                   transitionTo(3);
                 } catch {
                   setConfirmError("Booking failed. Try a different slot.");
@@ -264,7 +316,7 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
                   setConfirming(false);
                 }
               }}
-              disabled={!selectedSlot || confirming}
+              disabled={!selectedSlot || confirming || !selectedPackageId}
             />
             {confirmError ? <Text style={styles.slotEmpty}>{confirmError}</Text> : null}
           </GlassCard>
@@ -323,6 +375,26 @@ const styles = StyleSheet.create({
   back: { color: colors.purple, fontWeight: "700", marginBottom: 4 },
   backSpacer: { height: 22 },
   section: { color: colors.text, fontSize: 17, fontWeight: "700", marginBottom: 12 },
+  pkgRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
+  pkgChip: {
+    flex: 1,
+    minWidth: 120,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: colors.cardSoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 4,
+  },
+  pkgChipActive: {
+    backgroundColor: colors.selectedCardBg,
+    borderColor: colors.selectedCardBorder,
+  },
+  pkgName: { color: colors.textMuted, fontWeight: "700", fontSize: 13 },
+  pkgNameActive: { color: colors.lime },
+  pkgPrice: { color: colors.text, fontWeight: "800", fontSize: 15 },
+  pkgPriceActive: { color: colors.lime },
   dateRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 },
   dateChip: {
     paddingVertical: 10,

@@ -6,10 +6,11 @@ import { colors } from "../theme/tokens";
 interface GymMapProps {
   gyms: GymItem[];
   selectedGymId: string | null;
+  userLocation?: { lat: number; lng: number } | null;
   onSelectGym: (id: string) => void;
 }
 
-export function GymMap({ gyms, selectedGymId, onSelectGym }: GymMapProps) {
+export function GymMap({ gyms, selectedGymId, userLocation, onSelectGym }: GymMapProps) {
   const MapImpl = useMemo(() => {
     if (Platform.OS === "web") return null;
     try {
@@ -40,17 +41,27 @@ export function GymMap({ gyms, selectedGymId, onSelectGym }: GymMapProps) {
 
   const MapView = MapImpl.default;
   const Marker = MapImpl.Marker;
+  const mapCenter =
+    userLocation ?? (gyms[0] ? { lat: gyms[0].lat, lng: gyms[0].lng } : { lat: 8.9806, lng: 38.7578 });
 
   return (
     <MapView
       style={styles.map}
       initialRegion={{
-        latitude: 8.9806,
-        longitude: 38.7578,
+        latitude: mapCenter.lat,
+        longitude: mapCenter.lng,
         latitudeDelta: 0.18,
         longitudeDelta: 0.18,
       }}
     >
+      {userLocation ? (
+        <Marker
+          key="you"
+          coordinate={{ latitude: userLocation.lat, longitude: userLocation.lng }}
+          pinColor={colors.lime}
+          title="You are here"
+        />
+      ) : null}
       {gyms.map((gym) => (
         <Marker
           key={gym.id}

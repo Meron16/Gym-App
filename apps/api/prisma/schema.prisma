@@ -14,27 +14,42 @@ enum UserRole {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  email       String?  @unique
-  firebaseUid String?  @unique
-  role        UserRole @default(user)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  firebaseUid  String?  @unique
+  /** Bcrypt hash for email/password auth (null when user only uses Firebase). */
+  passwordHash String?
+  phone        String?
+  displayName  String?
+  role         UserRole @default(user)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  bookings         Booking[]
-  subscriptions    Subscription[]
+  bookings             Booking[]
+  subscriptions        Subscription[]
   notificationTokens NotificationToken[]
 }
 
 model Gym {
-  id        String   @id @default(cuid())
-  name      String
-  address   String?
-  lat       Float
-  lng       Float
-  osmType   String?
-  osmId     String?
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  name           String
+  location       String
+  address        String
+  rating         Float    @default(4.2)
+  priceFrom      String   @default("$—")
+  tag            String   @default("Fitness")
+  capacityBase   Int      @default(45)
+  lat            Float
+  lng            Float
+  amenities      Json
+  operatingHours Json
+  photos         Json
+  osmType        String?
+  osmId          String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  bookings Booking[]
 }
 
 model Booking {
@@ -42,17 +57,24 @@ model Booking {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   gymId     String
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
   slotId    String
   status    String
   createdAt DateTime @default(now())
+
+  @@index([gymId, slotId, status])
 }
 
 model Package {
-  id          String @id @default(cuid())
-  name        String
-  priceCents  Int
-  billing     String
-  maxSessions Int    @default(999)
+  id                 String @id @default(cuid())
+  name               String
+  priceCents         Int
+  billing            String
+  maxSessions        Int    @default(999)
+  highlights         Json
+  maxSessionsPerWeek Int    @default(3)
+  /** Stripe Price ID (price_xxx) for Checkout; falls back to STRIPE_CHECKOUT_PRICE_ID env when null */
+  stripePriceId      String?
 }
 
 model Subscription {

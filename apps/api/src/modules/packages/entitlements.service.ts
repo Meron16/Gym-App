@@ -14,18 +14,11 @@ export class EntitlementsService {
     if (!strict) {
       return;
     }
-    try {
-      const n = await this.prisma.subscription.count({
-        where: { userId, active: true },
-      });
-      if (n < 1) {
-        throw new ForbiddenException("Active membership required to book");
-      }
-    } catch (e) {
-      if (e instanceof ForbiddenException) {
-        throw e;
-      }
-      /* Prisma unavailable — allow MVP flow */
+    const n = await this.prisma.subscription.count({
+      where: { userId, active: true },
+    });
+    if (n < 1) {
+      throw new ForbiddenException("Active membership required to book");
     }
   }
 }

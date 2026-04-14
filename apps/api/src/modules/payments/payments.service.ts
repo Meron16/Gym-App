@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../prisma/prisma.service";
 import Stripe from "stripe";
@@ -24,10 +24,19 @@ export class PaymentsService {
   ): Promise<CheckoutSessionResponseDto> {
     const placeholder = this.config.get<string>("stripe.checkoutPlaceholderUrl")!;
     const secretKey = this.config.get<string>("stripe.secretKey");
-    const priceId = process.env.STRIPE_CHECKOUT_PRICE_ID ?? "";
+    const fallbackPriceId = (process.env.STRIPE_CHECKOUT_PRICE_ID ?? "").trim();
+
+    const pkg = await this.prisma.package.findUnique({ where: { id: dto.packageId } });
+    if (!pkg) {
+      throw new NotFoundException("Package not found");
+    }
+
+    const priceId = (pkg.stripePriceId?.trim() || fallbackPriceId).trim();
 
     if (!secretKey || !priceId) {
-      this.log.log("Stripe checkout: using placeholder (set STRIPE_SECRET_KEY + STRIPE_CHECKOUT_PRICE_ID)");
+      this.log.log(
+        "Stripe checkout: using placeholder (set STRIPE_SECRET_KEY and per-package stripePriceId or STRIPE_CHECKOUT_PRICE_ID)",
+      );
       return { provider: "stripe", checkoutUrl: placeholder };
     }
 

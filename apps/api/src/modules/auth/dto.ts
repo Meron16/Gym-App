@@ -13,3 +13,16 @@ export interface FirebaseLoginResponseDto {
   profile: AuthProfileDto;
 }
 
+export interface RegisterRequestDto {
+  email: string;
+  password: string;
+  fullName?: string;
+  /** Digits only; optional */
+  phone?: string;
+}
+
+export interface LoginRequestDto {
+  email: string;
+  password: string;
+}
+

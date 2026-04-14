@@ -11,7 +11,7 @@ export default () => ({
     privateKey: (process.env.FIREBASE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n"),
   },
   auth: {
-    devAllowPlaceholder: process.env.AUTH_DEV_ALLOW_PLACEHOLDER_TOKEN !== "false",
+    devAllowPlaceholder: process.env.AUTH_DEV_ALLOW_PLACEHOLDER_TOKEN === "true",
   },
   booking: {
     requireEntitlement: process.env.BOOKING_REQUIRE_ENTITLEMENT === "true",

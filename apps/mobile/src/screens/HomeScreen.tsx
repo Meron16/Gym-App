@@ -7,9 +7,10 @@ import { colors } from "../theme/tokens";
 
 interface HomeScreenProps {
   onStartWorkout: () => void;
+  onMembership: () => void;
 }
 
-export function HomeScreen({ onStartWorkout }: HomeScreenProps) {
+export function HomeScreen({ onStartWorkout, onMembership }: HomeScreenProps) {
   return (
     <ScreenContainer>
       <Text style={styles.brand}>KINETIC</Text>
@@ -18,6 +19,7 @@ export function HomeScreen({ onStartWorkout }: HomeScreenProps) {
         <Text style={styles.heroTop}>WEEKLY GOAL</Text>
         <Text style={styles.heroTitle}>12 DAY STREAK</Text>
         <GlowButton label="Start Workout" onPress={onStartWorkout} style={styles.heroBtn} />
+        <GlowButton label="Membership & billing" variant="purple" onPress={onMembership} />
       </GlassCard>
       <View style={styles.statsRow}>
         <GlassCard style={styles.statCard}>

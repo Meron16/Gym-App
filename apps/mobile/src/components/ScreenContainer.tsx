@@ -18,8 +18,8 @@ export function ScreenContainer({
 }: ScreenContainerProps) {
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.glowTop} />
-      <View style={styles.glowBottom} />
+      <View style={styles.glowTop} pointerEvents="none" />
+      <View style={styles.glowBottom} pointerEvents="none" />
       {scrollable ? (
         <ScrollView
           style={styles.scroll}

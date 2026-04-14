@@ -1,13 +1,19 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Post } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
+import { AnalyticsService } from "./analytics.service";
 
 @Controller("analytics")
 export class AnalyticsController {
+  constructor(private readonly analyticsService: AnalyticsService) {}
+
   @Get("ping")
   ping() {
-    return { ok: true, message: "analytics stub" };
+    return { ok: true, message: "analytics service (Postgres store)" };
   }
 
+  /** Public endpoint: mobile sends lightweight funnel events (rate-limited per IP). */
   @Post("track")
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
   track(
     @Body()
     body: {
@@ -16,12 +22,13 @@ export class AnalyticsController {
       props?: Record<string, unknown>;
     },
   ) {
-    return {
-      accepted: true,
-      provider: process.env.MIXPANEL_TOKEN ? "mixpanel-placeholder" : "none",
-      event: body.event ?? null,
-      userId: body.userId ?? null,
-      message: "Event pipeline placeholder (wire Mixpanel worker in Phase 9)",
-    };
+    if (typeof body.event !== "string") {
+      throw new BadRequestException("event is required");
+    }
+    return this.analyticsService.track({
+      event: body.event,
+      userId: body.userId,
+      props: body.props,
+    });
   }
 }

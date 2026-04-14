@@ -1,75 +1,41 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 
-type MemoryGym = {
-  id: string;
-  name: string;
-  address?: string;
-  lat: number;
-  lng: number;
-  osmType?: string;
-  osmId?: string;
-};
-
-type MemoryPackage = {
-  id: string;
-  name: string;
-  billing: "daily" | "weekly" | "monthly" | "annual";
-  priceCents: number;
-  maxSessions: number;
-};
-
-const memoryGyms: MemoryGym[] = [];
-const memoryPackages: MemoryPackage[] = [];
-
 @Injectable()
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
 
   async overview() {
-    try {
-      const [bookingsToday, activeSubs, gyms, revenue] = await Promise.all([
-        this.prisma.booking.count({
-          where: { createdAt: { gte: startOfToday(), lte: endOfToday() } },
-        }),
-        this.prisma.subscription.count({ where: { active: true } }),
-        this.prisma.gym.count(),
-        this.prisma.paymentRecord.aggregate({ _sum: { amountCents: true } }),
-      ]);
+    const [bookingsToday, activeSubs, gyms, revenue] = await Promise.all([
+      this.prisma.booking.count({
+        where: { createdAt: { gte: startOfToday(), lte: endOfToday() } },
+      }),
+      this.prisma.subscription.count({ where: { active: true } }),
+      this.prisma.gym.count(),
+      this.prisma.paymentRecord.aggregate({ _sum: { amountCents: true } }),
+    ]);
 
-      return {
-        bookingsToday,
-        activeSubscriptions: activeSubs,
-        gyms,
-        revenueCents: revenue._sum.amountCents ?? 0,
-      };
-    } catch {
-      return {
-        bookingsToday: 0,
-        activeSubscriptions: 0,
-        gyms: memoryGyms.length,
-        revenueCents: 0,
-      };
-    }
+    return {
+      bookingsToday,
+      activeSubscriptions: activeSubs,
+      gyms,
+      revenueCents: revenue._sum.amountCents ?? 0,
+    };
   }
 
   async listBookings() {
-    try {
-      const rows = await this.prisma.booking.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 200,
-      });
-      return rows.map((r) => ({
-        id: r.id,
-        userId: r.userId,
-        gymId: r.gymId,
-        slotId: r.slotId,
-        status: r.status,
-        createdAt: r.createdAt.toISOString(),
-      }));
-    } catch {
-      return [];
-    }
+    const rows = await this.prisma.booking.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      gymId: r.gymId,
+      slotId: r.slotId,
+      status: r.status,
+      createdAt: r.createdAt.toISOString(),
+    }));
   }
 
   async cancelBooking(id: string) {
@@ -93,28 +59,31 @@ export class AdminService {
 
   async createGym(body: {
     name: string;
+    location?: string;
     address?: string;
     lat: number;
     lng: number;
     osmType?: string;
     osmId?: string;
   }) {
-    try {
-      return await this.prisma.gym.create({
-        data: {
-          name: body.name,
-          address: body.address ?? null,
-          lat: body.lat,
-          lng: body.lng,
-          osmType: body.osmType ?? null,
-          osmId: body.osmId ?? null,
-        },
-      });
-    } catch {
-      const row: MemoryGym = { id: `gym_${Date.now()}`, ...body };
-      memoryGyms.push(row);
-      return row;
-    }
+    return await this.prisma.gym.create({
+      data: {
+        name: body.name,
+        location: body.location ?? body.address ?? "Unknown",
+        address: body.address ?? body.location ?? "Unknown",
+        rating: 4.2,
+        priceFrom: "$—",
+        tag: "Fitness",
+        capacityBase: 45,
+        amenities: [],
+        operatingHours: [],
+        photos: [],
+        lat: body.lat,
+        lng: body.lng,
+        osmType: body.osmType ?? null,
+        osmId: body.osmId ?? null,
+      },
+    });
   }
 
   async createPackage(body: {
@@ -122,27 +91,21 @@ export class AdminService {
     billing: "daily" | "weekly" | "monthly" | "annual";
     priceCents: number;
     maxSessions?: number;
+    highlights?: string[];
+    maxSessionsPerWeek?: number;
+    stripePriceId?: string;
   }) {
-    try {
-      return await this.prisma.package.create({
-        data: {
-          name: body.name,
-          billing: body.billing,
-          priceCents: body.priceCents,
-          maxSessions: body.maxSessions ?? 999,
-        },
-      });
-    } catch {
-      const row: MemoryPackage = {
-        id: `pkg_${Date.now()}`,
+    return await this.prisma.package.create({
+      data: {
         name: body.name,
         billing: body.billing,
         priceCents: body.priceCents,
         maxSessions: body.maxSessions ?? 999,
-      };
-      memoryPackages.push(row);
-      return row;
-    }
+        highlights: body.highlights ?? [],
+        maxSessionsPerWeek: body.maxSessionsPerWeek ?? 3,
+        stripePriceId: body.stripePriceId?.trim() || null,
+      },
+    });
   }
 }
 

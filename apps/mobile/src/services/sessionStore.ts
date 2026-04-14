@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { firebaseSignOut } from "./firebaseAuth";
 
 const TOKEN_KEY = "kinetic_access_token";
 const PROFILE_ID_KEY = "kinetic_profile_id";
@@ -9,6 +10,7 @@ export async function setSession(accessToken: string, profileId: string): Promis
 }
 
 export async function clearSession(): Promise<void> {
+  await firebaseSignOut();
   await AsyncStorage.removeItem(TOKEN_KEY);
   await AsyncStorage.removeItem(PROFILE_ID_KEY);
 }

@@ -4,5 +4,10 @@ import { HomeScreen } from "../../../src/screens/HomeScreen";
 
 export default function Home() {
   const router = useRouter();
-  return <HomeScreen onStartWorkout={() => router.push("/(app)/(tabs)/browse")} />;
+  return (
+    <HomeScreen
+      onStartWorkout={() => router.push("/(app)/(tabs)/browse")}
+      onMembership={() => router.push("/(app)/(tabs)/plans")}
+    />
+  );
 }

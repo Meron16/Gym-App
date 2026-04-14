@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { EmptyState } from "../components/EmptyState";
 import { FilterChip } from "../components/FilterChip";
@@ -23,6 +24,33 @@ export function BrowseScreen() {
   const [showMap, setShowMap] = useState(true);
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
   const [facility, setFacility] = useState<FacilityFilter>("all");
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationLabel, setLocationLabel] = useState("Nearest venues by your current location");
+
+  useEffect(() => {
+    let mounted = true;
+    void (async () => {
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (!mounted) return;
+        if (perm.status !== "granted") {
+          setLocationLabel("Location not granted - showing all venues");
+          return;
+        }
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (!mounted) return;
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationLabel("Nearest venues around you");
+      } catch {
+        if (mounted) setLocationLabel("Could not read location - showing all venues");
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -32,16 +60,18 @@ export function BrowseScreen() {
         facility === "crossfit" ? "crossfit" : facility === "strength" ? "strength" : undefined;
       const data = await api.getGyms({
         q: "",
-        location: "Addis Ababa, Ethiopia",
         facility: facilityParam,
+        lat: userLocation?.lat,
+        lng: userLocation?.lng,
+        radiusKm: userLocation ? 30 : undefined,
       });
       setGyms(data);
     } catch {
-      setError("Could not load gyms.");
+      setError("Could not load gyms. Check API + database connection.");
     } finally {
       setLoading(false);
     }
-  }, [facility]);
+  }, [facility, userLocation]);
 
   useEffect(() => {
     void load();
@@ -57,7 +87,7 @@ export function BrowseScreen() {
     <ScreenContainer>
       <SectionHeader
         title="Discover"
-        subtitle="OpenStreetMap venues near Addis."
+        subtitle={locationLabel}
         right={
           <Pressable
             onPress={() => setShowMap((v) => !v)}
@@ -90,6 +120,7 @@ export function BrowseScreen() {
           <GymMap
             gyms={gyms}
             selectedGymId={selectedGymId}
+            userLocation={userLocation}
             onSelectGym={(id) => {
               setSelectedGymId(id);
               openGym(id);

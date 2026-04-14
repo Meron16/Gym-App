@@ -1,19 +1,31 @@
 import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { Request } from "express";
+import { AnalyticsService } from "../analytics/analytics.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import { GymsService } from "../gyms/gyms.service";
 import { AdminService } from "./admin.service";
 
 @Controller("admin")
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles("operator", "admin")
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly gymsService: GymsService,
+    private readonly analyticsService: AnalyticsService,
+  ) {}
 
   @Get("overview")
   overview() {
     return this.adminService.overview();
+  }
+
+  @Get("analytics/summary")
+  analyticsSummary() {
+    return this.analyticsService.summaryLastDays(7);
   }
 
   @Get("bookings")
@@ -24,6 +36,12 @@ export class AdminController {
   @Patch("bookings/:id/cancel")
   cancelBooking(@Param("id") id: string) {
     return this.adminService.cancelBooking(id);
+  }
+
+  @Post("gyms/sync-osm")
+  @Throttle({ default: { limit: 8, ttl: 60000 } })
+  syncOsmGyms(@Body() body: { location?: string }) {
+    return this.gymsService.syncOsmVenues(body.location);
   }
 
   @Post("gyms")
@@ -49,6 +67,9 @@ export class AdminController {
       billing: "daily" | "weekly" | "monthly" | "annual";
       priceCents: number;
       maxSessions?: number;
+      highlights?: string[];
+      maxSessionsPerWeek?: number;
+      stripePriceId?: string;
     },
   ) {
     return this.adminService.createPackage(body);

@@ -21,5 +21,11 @@ export interface GymSearchQueryDto {
   q?: string;
   location?: string;
   facility?: string;
+  /** Current user latitude for nearest sorting/filtering. */
+  lat?: number;
+  /** Current user longitude for nearest sorting/filtering. */
+  lng?: number;
+  /** Optional radius filter in kilometers when lat/lng are provided. */
+  radiusKm?: number;
 }
 

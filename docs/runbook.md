@@ -4,7 +4,7 @@
 - API (`apps/api`) on port `3001`
 - Mobile app (`apps/mobile`) built via Expo/EAS
 - Admin web (`apps/admin-web`) on port `3002`
-- Postgres + Redis via `infra/docker-compose.yml`
+- PostgreSQL (managed or `infra/docker-compose.yml` for local Postgres only)
 
 ## Deploy Steps (staging/prod)
 1. Build + test in CI (`.github/workflows/ci.yml`).

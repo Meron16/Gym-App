@@ -12,7 +12,7 @@ export class GymsController {
   }
 
   @Get(":id")
-  detail(@Param("id") id: string): GymDetailDto {
+  detail(@Param("id") id: string): Promise<GymDetailDto> {
     return this.gymsService.detail(id);
   }
 }
