@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { EmptyState } from "../components/EmptyState";
 import { GlassCard } from "../components/GlassCard";
 import { GlowButton } from "../components/GlowButton";
@@ -9,12 +9,13 @@ import { colors } from "../theme/tokens";
 import { motion } from "../theme/motion";
 import { track } from "../services/analytics";
 import { api } from "../services/apiClient";
-import type { BookingSlot, GymItem, Package } from "../types/app";
+import type { BookingSlot, Package } from "../types/app";
 
 const STEPS = ["Date", "Time", "Review", "Done"] as const;
 
-interface BookingScreenProps {
-  gymId?: string;
+interface TrainerBookScreenProps {
+  trainerId: string;
+  trainerName?: string;
   onDone?: () => void;
 }
 
@@ -32,42 +33,43 @@ function formatSlotTime(iso: string) {
   return `${hour12}:${mm} ${ampm}`;
 }
 
-export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
+function mapErr(err: unknown): string {
+  const raw = err instanceof Error ? err.message : "";
+  const n = raw.replace(/^API\s+\d+:\s*/i, "").toLowerCase();
+  if (n.includes("missing bearer") || n.includes("invalid or expired token")) {
+    return "Your session expired. Please log in again.";
+  }
+  if (n.includes("active membership")) {
+    return "An active membership is required before booking.";
+  }
+  if (n.includes("slot is full")) {
+    return "That slot just filled up. Please choose another.";
+  }
+  return raw.replace(/^API\s+\d+:\s*/i, "") || "Booking failed.";
+}
+
+export function TrainerBookScreen({ trainerId, trainerName, onDone }: TrainerBookScreenProps) {
   const [step, setStep] = useState(0);
   const [packages, setPackages] = useState<Package[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
-  /** When opening Book tab without deep link, user picks a venue from the catalog. */
-  const [venueList, setVenueList] = useState<GymItem[]>([]);
-  const [pickedGymId, setPickedGymId] = useState<string | null>(null);
-
-  const effectiveGymId = gymId ?? pickedGymId ?? undefined;
-  const venueLabel = useMemo(() => {
-    if (!effectiveGymId) return "Gym";
-    const g = venueList.find((x) => x.id === effectiveGymId);
-    return g?.name ?? effectiveGymId.replaceAll("-", " ");
-  }, [effectiveGymId, venueList]);
-
   const [confirming, setConfirming] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const dateOptions = useMemo(() => {
     const today = new Date();
-    // Next 5 days
     return Array.from({ length: 5 }).map((_, i) => {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
       const iso = toISODate(d);
       const label = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-      // Keep short label like "Wed 14" feel
       const compact = label.replace(/,?\s[A-Za-z]{3}\s/, " ");
-      // If replace fails (different locales), fall back to weekday + day only
       const fallback = `${d.toLocaleDateString("en-US", { weekday: "short" })} ${d.getDate()}`;
       return { iso, label: compact || fallback };
     });
   }, []);
 
-  const [dateIso, setDateIso] = useState(dateOptions[2]?.iso ?? dateOptions[0]?.iso);
+  const [dateIso, setDateIso] = useState(dateOptions[0]?.iso ?? "");
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [slots, setSlots] = useState<BookingSlot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -94,33 +96,13 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
   }, []);
 
   useEffect(() => {
-    if (gymId) return;
-    let mounted = true;
-    void (async () => {
-      try {
-        const list = await api.getGyms({});
-        if (!mounted) return;
-        setVenueList(list);
-        setPickedGymId((prev) => prev ?? list[0]?.id ?? null);
-      } catch {
-        if (mounted) {
-          setVenueList([]);
-        }
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [gymId]);
-
-  useEffect(() => {
-    if (!effectiveGymId || !dateIso) return;
+    if (!trainerId || !dateIso) return;
     let mounted = true;
     void (async () => {
       try {
         setSlotsError(null);
         setLoadingSlots(true);
-        const res = await api.getBookingAvailability({ gymId: effectiveGymId, date: dateIso });
+        const res = await api.getTrainerAvailability(trainerId, dateIso);
         if (!mounted) return;
         setSlots(res.slots);
         setSelectedSlotId((prev) => {
@@ -136,7 +118,7 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
     return () => {
       mounted = false;
     };
-  }, [effectiveGymId, dateIso]);
+  }, [trainerId, dateIso]);
 
   const selectedSlot = useMemo(
     () => slots.find((s) => s.slotId === selectedSlotId) ?? null,
@@ -187,32 +169,11 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
     if (step > 0 && step < 3) transitionTo(step - 1);
   };
 
-  function mapBookingError(err: unknown): string {
-    const raw = err instanceof Error ? err.message : "";
-    const normalized = raw.replace(/^API\s+\d+:\s*/i, "").toLowerCase();
-    if (!normalized) return "Booking failed. Please try again.";
-    if (normalized.includes("missing bearer token") || normalized.includes("invalid or expired token")) {
-      return "Your session expired. Please log in again.";
-    }
-    if (normalized.includes("active membership required")) {
-      return "An active membership is required before booking.";
-    }
-    if (normalized.includes("slot is full")) {
-      return "That slot just filled up. Please choose another slot.";
-    }
-    if (normalized.includes("gym not found")) {
-      return "This gym is unavailable right now. Please pick another gym.";
-    }
-    return raw.replace(/^API\s+\d+:\s*/i, "") || "Booking failed. Please try again.";
-  }
-
   return (
     <ScreenContainer>
-      <Text style={styles.title}>Book your session</Text>
+      <Text style={styles.title}>Book a coach</Text>
       <Text style={styles.subtitle}>
-        {!gymId
-          ? "Pick a venue, plan, and time — or open a gym from Browse to pre-select it."
-          : "Minimal steps. Real slots. Instant confirmation."}
+        {trainerName ? `${trainerName} · ` : ""}1:1 session · same slot rules as gym booking
       </Text>
 
       <View style={styles.stepRow}>
@@ -235,34 +196,9 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
       <Animated.View style={{ opacity, transform: [{ translateY }] }}>
         {step === 0 && (
           <GlassCard>
-            {!gymId ? (
-              <>
-                <Text style={styles.section}>Venue</Text>
-                {venueList.length === 0 ? (
-                  <Text style={styles.slotEmpty}>Loading venues…</Text>
-                ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.venueRow}>
-                    {venueList.map((g) => {
-                      const active = pickedGymId === g.id;
-                      return (
-                        <Pressable
-                          key={g.id}
-                          onPress={() => setPickedGymId(g.id)}
-                          style={[styles.venueChip, active && styles.venueChipActive]}
-                        >
-                          <Text style={[styles.venueChipText, active && styles.venueChipTextActive]} numberOfLines={2}>
-                            {g.name}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                )}
-              </>
-            ) : null}
-            <Text style={[styles.section, { marginTop: !gymId ? 14 : 0 }]}>Membership plan</Text>
+            <Text style={styles.section}>Membership plan</Text>
             {packages.length === 0 ? (
-              <Text style={styles.slotEmpty}>No plans in catalog. Seed packages on the API.</Text>
+              <Text style={styles.slotEmpty}>No plans in catalog.</Text>
             ) : (
               <View style={styles.pkgRow}>
                 {packages.map((p) => {
@@ -297,19 +233,15 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
                 );
               })}
             </View>
-            <GlowButton
-              label="Continue"
-              onPress={next}
-              disabled={!selectedPackageId || !effectiveGymId}
-            />
+            <GlowButton label="Continue" onPress={next} disabled={!selectedPackageId} />
           </GlassCard>
         )}
 
         {step === 1 && (
           <GlassCard>
             <Text style={styles.section}>Choose a time slot</Text>
-            {!effectiveGymId ? (
-              <Text style={styles.slotEmpty}>Pick a venue on the previous step.</Text>
+            {!trainerId ? (
+              <Text style={styles.slotEmpty}>Missing trainer.</Text>
             ) : loadingSlots ? (
               <SlotsGridSkeleton />
             ) : slotsError ? (
@@ -318,12 +250,11 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
                 description={slotsError}
                 actionLabel="Retry"
                 onAction={() => {
-                  if (!effectiveGymId || !dateIso) return;
                   void (async () => {
                     try {
                       setSlotsError(null);
                       setLoadingSlots(true);
-                      const res = await api.getBookingAvailability({ gymId: effectiveGymId, date: dateIso });
+                      const res = await api.getTrainerAvailability(trainerId, dateIso);
                       setSlots(res.slots);
                     } catch {
                       setSlotsError("Could not load availability.");
@@ -340,14 +271,17 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
                   return (
                     <Pressable
                       key={s.slotId}
-                      hitSlop={6}
-                      onPress={() => {
-                        if (s.isAvailable) setSelectedSlotId(s.slotId);
-                      }}
+                      onPress={() => s.isAvailable && setSelectedSlotId(s.slotId)}
                       disabled={!s.isAvailable}
                       style={[styles.slot, active && styles.slotActive, !s.isAvailable && styles.slotDisabled]}
                     >
-                      <Text style={[styles.slotText, active && styles.slotTextActive, !s.isAvailable && styles.slotTextDisabled]}>
+                      <Text
+                        style={[
+                          styles.slotText,
+                          active && styles.slotTextActive,
+                          !s.isAvailable && styles.slotTextDisabled,
+                        ]}
+                      >
                         {formatSlotTime(s.startTime)}
                       </Text>
                     </Pressable>
@@ -365,53 +299,35 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
 
         {step === 2 && (
           <GlassCard style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Booking summary</Text>
+            <Text style={styles.summaryTitle}>Session summary</Text>
             <Text style={styles.summaryBody}>
-              {venueLabel} •{" "}
-              {dateOptions.find((d) => d.iso === dateIso)?.label ?? "—"} •{" "}
+              {trainerName ?? "Coach"} · {dateOptions.find((d) => d.iso === dateIso)?.label ?? "—"} ·{" "}
               {selectedSlot ? formatSlotTime(selectedSlot.startTime) : "—"}
             </Text>
             <Text style={styles.summaryMeta}>
-              {packages.find((p) => p.id === selectedPackageId)?.name ?? "Plan"} •{" "}
-              {packages.find((p) => p.id === selectedPackageId)?.price ?? "—"} • 1 session
+              {packages.find((p) => p.id === selectedPackageId)?.name ?? "Plan"} · 1:1 slot
             </Text>
             <GlowButton
-              label={confirming ? "Confirming…" : "Confirm & pay"}
+              label={confirming ? "Confirming…" : "Confirm session"}
               onPress={async () => {
-                if (!effectiveGymId || !selectedSlot || !selectedPackageId) return;
+                if (!trainerId || !selectedSlot || !selectedPackageId) return;
                 try {
                   setConfirmError(null);
                   setConfirming(true);
-                  const created = await api.createBooking({
-                    gymId: effectiveGymId,
+                  const created = await api.createTrainerBooking({
+                    trainerId,
                     slotId: selectedSlot.slotId,
                     packageId: selectedPackageId,
                   });
                   setBookingId(created.id);
-                  track("booking_confirmed", {
-                    gym_id: effectiveGymId,
+                  track("trainer_booking_confirmed", {
+                    trainer_id: trainerId,
                     package_id: selectedPackageId,
                     booking_id: created.id,
                   });
                   transitionTo(3);
                 } catch (e) {
-                  setConfirmError(mapBookingError(e));
-                  if (effectiveGymId && dateIso) {
-                    void (async () => {
-                      try {
-                        const res = await api.getBookingAvailability({ gymId: effectiveGymId, date: dateIso });
-                        setSlots(res.slots);
-                        setSelectedSlotId((prev) => {
-                          if (prev && res.slots.some((s) => s.slotId === prev && s.isAvailable)) {
-                            return prev;
-                          }
-                          return res.slots.find((s) => s.isAvailable)?.slotId ?? null;
-                        });
-                      } catch {
-                        /* keep existing slots and error text */
-                      }
-                    })();
-                  }
+                  setConfirmError(mapErr(e));
                 } finally {
                   setConfirming(false);
                 }
@@ -427,16 +343,11 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
             <View style={styles.checkCircle}>
               <Text style={styles.checkMark}>✓</Text>
             </View>
-            <Text style={styles.successTitle}>You&apos;re in</Text>
+            <Text style={styles.successTitle}>Session locked</Text>
             <Text style={styles.successCopy}>
-              {bookingId ? `Booking ${bookingId} locked.` : "Session locked."} We&apos;ll remind you 30 minutes before.
+              {bookingId ? `Booking ${bookingId}` : "Confirmed"}. We&apos;ll remind you before the slot.
             </Text>
-            <GlowButton
-              label="Back to browse"
-              onPress={() => {
-                onDone?.();
-              }}
-            />
+            <GlowButton label="Done" onPress={() => onDone?.()} />
           </GlassCard>
         )}
       </Animated.View>
@@ -445,7 +356,7 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  title: { color: colors.text, fontSize: 34, fontWeight: "900", textTransform: "uppercase" },
+  title: { color: colors.text, fontSize: 30, fontWeight: "900", textTransform: "uppercase" },
   subtitle: { color: colors.textMuted, marginBottom: 4 },
   stepRow: {
     flexDirection: "row",
@@ -529,7 +440,7 @@ const styles = StyleSheet.create({
   slotTextDisabled: { color: colors.textMuted },
   summaryCard: { gap: 10 },
   summaryTitle: { color: colors.textMuted, textTransform: "uppercase", fontSize: 12 },
-  summaryBody: { color: colors.text, fontSize: 22, fontWeight: "800" },
+  summaryBody: { color: colors.text, fontSize: 20, fontWeight: "800" },
   summaryMeta: { color: colors.textMuted, marginBottom: 6 },
   successCard: { alignItems: "center", gap: 12, paddingVertical: 28 },
   checkCircle: {
@@ -549,20 +460,4 @@ const styles = StyleSheet.create({
   successTitle: { color: colors.text, fontSize: 28, fontWeight: "900", textTransform: "uppercase" },
   successCopy: { color: colors.textMuted, textAlign: "center", paddingHorizontal: 12, lineHeight: 20 },
   slotEmpty: { color: colors.textMuted, fontWeight: "700", marginTop: 10 },
-  venueRow: { flexDirection: "row", gap: 8, paddingVertical: 4 },
-  venueChip: {
-    maxWidth: 200,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: colors.cardSoft,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  venueChipActive: {
-    backgroundColor: colors.selectedCardBg,
-    borderColor: colors.selectedCardBorder,
-  },
-  venueChipText: { color: colors.textMuted, fontWeight: "700", fontSize: 13 },
-  venueChipTextActive: { color: colors.lime },
 });

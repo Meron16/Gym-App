@@ -37,7 +37,7 @@ export class PaymentsService {
       this.log.log(
         "Stripe checkout: using placeholder (set STRIPE_SECRET_KEY and per-package stripePriceId or STRIPE_CHECKOUT_PRICE_ID)",
       );
-      return { provider: "stripe", checkoutUrl: placeholder };
+      return { provider: "stripe", checkoutUrl: placeholder, liveCheckout: false };
     }
 
     try {
@@ -49,13 +49,15 @@ export class PaymentsService {
         line_items: [{ price: priceId, quantity: 1 }],
         metadata: { userId: authenticatedUserId, packageId: dto.packageId },
       });
+      const url = session.url ?? placeholder;
       return {
         provider: "stripe",
-        checkoutUrl: session.url ?? placeholder,
+        checkoutUrl: url,
+        liveCheckout: Boolean(session.url),
       };
     } catch (e) {
       this.log.warn(`Stripe session error: ${(e as Error).message}`);
-      return { provider: "stripe", checkoutUrl: placeholder };
+      return { provider: "stripe", checkoutUrl: placeholder, liveCheckout: false };
     }
   }
 

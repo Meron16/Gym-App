@@ -17,6 +17,9 @@ export default () => ({
     requireEntitlement: process.env.BOOKING_REQUIRE_ENTITLEMENT === "true",
     slotCapacity: parseInt(process.env.BOOKING_SLOT_CAPACITY ?? "10", 10),
   },
+  trainerBooking: {
+    slotCapacity: parseInt(process.env.TRAINER_SLOT_CAPACITY ?? "1", 10),
+  },
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY ?? "",
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",

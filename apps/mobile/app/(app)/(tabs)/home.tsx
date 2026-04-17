@@ -8,6 +8,7 @@ export default function Home() {
     <HomeScreen
       onStartWorkout={() => router.push("/(app)/(tabs)/browse")}
       onMembership={() => router.push("/(app)/(tabs)/plans")}
+      onTrainers={() => router.push("/(app)/(tabs)/trainers")}
     />
   );
 }

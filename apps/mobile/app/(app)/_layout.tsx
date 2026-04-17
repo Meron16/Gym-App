@@ -12,6 +12,8 @@ export default function AppStackLayout() {
     >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="gym/[id]" />
+      <Stack.Screen name="trainer/[id]" />
+      <Stack.Screen name="trainer-book/[trainerId]" />
     </Stack>
   );
 }

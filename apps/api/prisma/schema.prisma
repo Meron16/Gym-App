@@ -28,6 +28,8 @@ model User {
   bookings             Booking[]
   subscriptions        Subscription[]
   notificationTokens NotificationToken[]
+  trainerBookings      TrainerBooking[]
+  workoutEvents        WorkoutEvent[]
 }
 
 model Gym {
@@ -50,6 +52,39 @@ model Gym {
   updatedAt      DateTime @updatedAt
 
   bookings Booking[]
+  trainers Trainer[]
+}
+
+model Trainer {
+  id           String   @id @default(cuid())
+  gymId        String
+  gym          Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  name         String
+  tagline      String   @default("")
+  expertise    Json
+  /** Weekly schedule: [{ "day": "Mon", "slots": ["06:30", "09:00"] }, ...] */
+  availability Json
+  photoUrl     String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  bookings TrainerBooking[]
+
+  @@index([gymId])
+}
+
+model TrainerBooking {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainerId String
+  trainer   Trainer  @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  slotId    String
+  status    String
+  createdAt DateTime @default(now())
+
+  @@index([trainerId, slotId, status])
 }
 
 model Booking {
@@ -118,4 +153,17 @@ model AnalyticsEvent {
   userId    String?
   props     String?
   createdAt DateTime @default(now())
+}
+
+/** Logged workouts for Pulse streak / charts / gamification */
+model WorkoutEvent {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind             String   @default("workout")
+  durationMinutes  Int?
+  caloriesEstimate Int?
+  createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

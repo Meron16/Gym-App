@@ -107,12 +107,69 @@ const packages = [
   },
 ];
 
+const defaultTrainerAvailability = [
+  { day: "Mon", slots: ["06:30", "07:30", "09:00", "17:30", "19:00"] },
+  { day: "Tue", slots: ["06:30", "07:30", "09:00", "17:30", "19:00"] },
+  { day: "Wed", slots: ["06:30", "07:30", "09:00", "17:30", "19:00"] },
+  { day: "Thu", slots: ["06:30", "07:30", "09:00", "17:30", "19:00"] },
+  { day: "Fri", slots: ["06:30", "07:30", "09:00", "17:30", "19:00"] },
+  { day: "Sat", slots: ["09:00", "11:00", "17:30"] },
+  { day: "Sun", slots: ["10:00", "12:00", "17:30"] },
+];
+
 async function main() {
   for (const gym of gyms) {
     await prisma.gym.upsert({
       where: { osmId: gym.osmId },
       update: gym,
       create: gym,
+    });
+  }
+
+  const gAddis = await prisma.gym.findFirst({ where: { osmId: "seed_addis_prime" } });
+  const gPulse = await prisma.gym.findFirst({ where: { osmId: "seed_pulse_zone" } });
+  if (gAddis) {
+    await prisma.trainer.upsert({
+      where: { id: "trainer_seed_sara" },
+      update: {
+        name: "Sara Bekele",
+        tagline: "Explosive power, zero compromise.",
+        expertise: ["HIIT", "Strength", "Mobility"],
+        availability: defaultTrainerAvailability,
+        active: true,
+      },
+      create: {
+        id: "trainer_seed_sara",
+        gymId: gAddis.id,
+        name: "Sara Bekele",
+        tagline: "Explosive power, zero compromise.",
+        expertise: ["HIIT", "Strength", "Mobility"],
+        availability: defaultTrainerAvailability,
+        photoUrl: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=400&q=80",
+        active: true,
+      },
+    });
+  }
+  if (gPulse) {
+    await prisma.trainer.upsert({
+      where: { id: "trainer_seed_daniel" },
+      update: {
+        name: "Daniel Tesfaye",
+        tagline: "Move well, recover smarter.",
+        expertise: ["Mobility", "Recovery", "Yoga"],
+        availability: defaultTrainerAvailability,
+        active: true,
+      },
+      create: {
+        id: "trainer_seed_daniel",
+        gymId: gPulse.id,
+        name: "Daniel Tesfaye",
+        tagline: "Move well, recover smarter.",
+        expertise: ["Mobility", "Recovery", "Yoga"],
+        availability: defaultTrainerAvailability,
+        photoUrl: "https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=400&q=80",
+        active: true,
+      },
     });
   }
 

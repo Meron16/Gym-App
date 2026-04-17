@@ -1,16 +1,31 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme/tokens";
 import { motion } from "../theme/motion";
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-/** Relative heights 0–1 */
-const VALUES = [0.45, 0.62, 0.88, 0.55, 0.72, 0.4, 0.5];
+const DEFAULT_VALUES = [0.45, 0.62, 0.88, 0.55, 0.72, 0.4, 0.5];
+const DEFAULT_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export function ActivityBarChart() {
-  const anims = useRef(VALUES.map(() => new Animated.Value(0))).current;
+interface ActivityBarChartProps {
+  /** Length 7, heights 0–1 */
+  values?: number[];
+  /** Length 7 day labels */
+  labels?: string[];
+}
+
+export function ActivityBarChart({ values, labels }: ActivityBarChartProps) {
+  const v = useMemo(() => {
+    const raw = values?.length === 7 ? values : DEFAULT_VALUES;
+    const max = Math.max(0.08, ...raw);
+    return raw.map((x) => Math.min(1, x / max));
+  }, [values]);
+
+  const dayLabels = labels?.length === 7 ? labels : DEFAULT_LABELS;
+
+  const anims = useRef(v.map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
+    if (anims.length !== v.length) return;
     Animated.stagger(
       45,
       anims.map((a) =>
@@ -21,33 +36,37 @@ export function ActivityBarChart() {
         }),
       ),
     ).start();
-  }, [anims]);
+  }, [anims, v]);
+
+  const peak = v.indexOf(Math.max(...v));
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.legend}>
-        <Text style={styles.dotLavender}>●</Text> Cardio{"   "}
-        <Text style={styles.dotLime}>●</Text> Power
+        <Text style={styles.dotLavender}>●</Text> Logged sessions{"   "}
+        <Text style={styles.dotLime}>●</Text> Peak day
       </Text>
       <View style={styles.chart}>
-        {VALUES.map((v, i) => {
-          const height = anims[i].interpolate({
+        {v.map((height, i) => {
+          const animH = anims[Math.min(i, anims.length - 1)]!;
+          const barHeight = animH.interpolate({
             inputRange: [0, 1],
-            outputRange: [4, 4 + v * 72],
+            outputRange: [4, 4 + height * 72],
           });
+          const isPeak = i === peak;
           return (
-            <View key={DAYS[i]} style={styles.col}>
+            <View key={`${dayLabels[i]}-${i}`} style={styles.col}>
               <Animated.View
                 style={[
                   styles.bar,
                   {
-                    height,
-                    backgroundColor: i === 3 ? colors.lime : colors.purpleDeep,
-                    opacity: i === 3 ? 1 : 0.75,
+                    height: barHeight,
+                    backgroundColor: isPeak ? colors.lime : colors.purpleDeep,
+                    opacity: isPeak ? 1 : 0.78,
                   },
                 ]}
               />
-              <Text style={[styles.day, i === 3 && styles.dayActive]}>{DAYS[i]}</Text>
+              <Text style={[styles.day, isPeak && styles.dayActive]}>{dayLabels[i]}</Text>
             </View>
           );
         })}

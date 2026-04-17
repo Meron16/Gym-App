@@ -1,6 +1,16 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 
+const defaultTrainerAvailability = [
+  { day: "Mon", slots: ["06:30", "09:00", "17:30"] },
+  { day: "Tue", slots: ["07:30", "17:30", "19:00"] },
+  { day: "Wed", slots: ["06:30", "09:00", "19:00"] },
+  { day: "Thu", slots: ["07:30", "17:30"] },
+  { day: "Fri", slots: ["06:30", "09:00", "17:30", "19:00"] },
+  { day: "Sat", slots: ["09:00", "11:00"] },
+  { day: "Sun", slots: ["10:00", "12:00"] },
+];
+
 @Injectable()
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
@@ -84,6 +94,88 @@ export class AdminService {
         osmId: body.osmId ?? null,
       },
     });
+  }
+
+  async listTrainers() {
+    const rows = await this.prisma.trainer.findMany({
+      include: { gym: { select: { name: true, location: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 200,
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      gymId: r.gymId,
+      gymName: r.gym.name,
+      name: r.name,
+      tagline: r.tagline,
+      expertise: Array.isArray(r.expertise) ? r.expertise : [],
+      active: r.active,
+      photoUrl: r.photoUrl,
+    }));
+  }
+
+  async createTrainer(body: {
+    gymId: string;
+    name: string;
+    tagline?: string;
+    expertise: string[];
+    availability?: { day: string; slots: string[] }[];
+    photoUrl?: string;
+  }) {
+    const gym = await this.prisma.gym.findUnique({ where: { id: body.gymId } });
+    if (!gym) {
+      throw new NotFoundException("Gym not found");
+    }
+    return await this.prisma.trainer.create({
+      data: {
+        gymId: body.gymId,
+        name: body.name.trim(),
+        tagline: body.tagline?.trim() ?? "",
+        expertise: body.expertise ?? [],
+        availability: body.availability?.length ? body.availability : defaultTrainerAvailability,
+        photoUrl: body.photoUrl?.trim() || null,
+        active: true,
+      },
+    });
+  }
+
+  async updateTrainer(
+    id: string,
+    body: Partial<{
+      name: string;
+      tagline: string;
+      expertise: string[];
+      availability: { day: string; slots: string[] }[];
+      photoUrl: string | null;
+      active: boolean;
+      gymId: string;
+    }>,
+  ) {
+    try {
+      return await this.prisma.trainer.update({
+        where: { id },
+        data: {
+          ...(body.name !== undefined ? { name: body.name.trim() } : {}),
+          ...(body.tagline !== undefined ? { tagline: body.tagline.trim() } : {}),
+          ...(body.expertise !== undefined ? { expertise: body.expertise } : {}),
+          ...(body.availability !== undefined ? { availability: body.availability } : {}),
+          ...(body.photoUrl !== undefined ? { photoUrl: body.photoUrl } : {}),
+          ...(body.active !== undefined ? { active: body.active } : {}),
+          ...(body.gymId !== undefined ? { gymId: body.gymId } : {}),
+        },
+      });
+    } catch {
+      throw new NotFoundException("Trainer not found");
+    }
+  }
+
+  async deleteTrainer(id: string) {
+    try {
+      await this.prisma.trainer.delete({ where: { id } });
+      return { ok: true };
+    } catch {
+      throw new NotFoundException("Trainer not found");
+    }
   }
 
   async createPackage(body: {

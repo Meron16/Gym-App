@@ -1,10 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { colors } from "../theme/tokens";
 import { motion } from "../theme/motion";
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const SIZE = 160;
 const STROKE = 10;
@@ -18,21 +16,29 @@ interface ProgressRingProps {
   sublabel?: string;
 }
 
+/**
+ * Uses a plain SVG Circle (not Animated.createAnimatedComponent) so react-native-web
+ * does not forward RN-only props like `collapsable` to DOM nodes (React 19 warning).
+ */
 export function ProgressRing({ progress, label, sublabel }: ProgressRingProps) {
-  const anim = useRef(new Animated.Value(0)).current;
+  const clipped = Math.min(1, Math.max(0, progress));
+  const anim = useRef(new Animated.Value(clipped)).current;
+  const [dashOffset, setDashOffset] = useState(() => C * (1 - clipped));
 
   useEffect(() => {
+    const target = Math.min(1, Math.max(0, progress));
+    const id = anim.addListener(({ value }) => {
+      setDashOffset(C * (1 - value));
+    });
     Animated.timing(anim, {
-      toValue: Math.min(1, Math.max(0, progress)),
+      toValue: target,
       duration: motion.cardDuration + 200,
       useNativeDriver: false,
     }).start();
+    return () => {
+      anim.removeListener(id);
+    };
   }, [anim, progress]);
-
-  const strokeDashoffset = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [C, 0],
-  });
 
   return (
     <View style={styles.wrap}>
@@ -46,7 +52,7 @@ export function ProgressRing({ progress, label, sublabel }: ProgressRingProps) {
             strokeWidth={STROKE}
             fill="none"
           />
-          <AnimatedCircle
+          <Circle
             cx={SIZE / 2}
             cy={SIZE / 2}
             r={R}
@@ -54,7 +60,7 @@ export function ProgressRing({ progress, label, sublabel }: ProgressRingProps) {
             strokeWidth={STROKE}
             fill="none"
             strokeDasharray={`${C} ${C}`}
-            strokeDashoffset={strokeDashoffset}
+            strokeDashoffset={dashOffset}
             strokeLinecap="round"
           />
         </Svg>

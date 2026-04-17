@@ -1,20 +1,18 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getAuth, initializeAuth, type Auth } from "firebase/auth";
-import { getReactNativePersistence } from "firebase/auth/react-native";
+import { getAuth, inMemoryPersistence, initializeAuth, type Auth } from "firebase/auth";
 import { getFirebaseApp } from "./firebaseApp";
 
 let cachedAuth: Auth | undefined;
 
 /**
- * Native (iOS/Android): AsyncStorage-backed auth persistence.
- * Web uses firebaseAuthInstance.web.ts — Metro never bundles firebase/auth/react-native there.
+ * Native (iOS/Android): uses in-memory persistence to stay compatible with Firebase v11+.
+ * Web uses firebaseAuthInstance.web.ts.
  */
 export function getFirebaseAuth(): Auth {
   if (cachedAuth) return cachedAuth;
   const app = getFirebaseApp();
   try {
     cachedAuth = initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage),
+      persistence: inMemoryPersistence,
     });
   } catch {
     cachedAuth = getAuth(app);

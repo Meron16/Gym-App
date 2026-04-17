@@ -1,4 +1,13 @@
-import type { Booking, BookingSlot, GymDetail, GymItem, Package } from "../types/app";
+import type {
+  ActivitySummary,
+  Booking,
+  BookingSlot,
+  GymDetail,
+  GymItem,
+  Package,
+  TrainerDetail,
+  TrainerSummary,
+} from "../types/app";
 import { getAccessToken } from "./sessionStore";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -139,7 +148,11 @@ export const api = {
     return jsonFetch(`${API_BASE_URL}/packages/me`);
   },
 
-  async createCheckoutSession(packageId: string): Promise<{ checkoutUrl: string; provider: string }> {
+  async createCheckoutSession(packageId: string): Promise<{
+    checkoutUrl: string;
+    provider: string;
+    liveCheckout: boolean;
+  }> {
     return jsonFetch(`${API_BASE_URL}/payments/checkout-session`, {
       method: "POST",
       body: JSON.stringify({ packageId }),
@@ -170,15 +183,58 @@ export const api = {
     });
   },
 
-  async getActivitySummary(userId: string): Promise<{
-    userId: string;
-    streakDays: number;
-    sessionsThisWeek: number;
-    badges: string[];
-    leaderboardPreview: { rank: number; name: string; points: number }[];
+  async getTrainers(gymId?: string): Promise<TrainerSummary[]> {
+    const url = new URL(`${API_BASE_URL}/trainers`);
+    if (gymId) url.searchParams.set("gymId", gymId);
+    return jsonFetch<TrainerSummary[]>(url);
+  },
+
+  async getTrainer(id: string): Promise<TrainerDetail> {
+    return jsonFetch(`${API_BASE_URL}/trainers/${encodeURIComponent(id)}`);
+  },
+
+  async getTrainerAvailability(trainerId: string, date: string): Promise<{
+    trainerId: string;
+    date: string;
+    slots: BookingSlot[];
   }> {
-    const url = new URL(`${API_BASE_URL}/activity/summary`);
-    url.searchParams.set("userId", userId);
+    const url = new URL(
+      `${API_BASE_URL}/trainers/${encodeURIComponent(trainerId)}/availability`,
+    );
+    url.searchParams.set("date", date);
     return jsonFetch(url);
+  },
+
+  async createTrainerBooking(dto: {
+    trainerId: string;
+    slotId: string;
+    packageId: string;
+  }): Promise<{
+    id: string;
+    trainerId: string;
+    slotId: string;
+    userId: string;
+    status: "confirmed" | "cancelled";
+    createdAt: string;
+  }> {
+    return jsonFetch(`${API_BASE_URL}/trainer-sessions`, {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
+
+  async getActivitySummary(): Promise<ActivitySummary> {
+    return jsonFetch(`${API_BASE_URL}/activity/summary`);
+  },
+
+  async logWorkout(body: {
+    kind?: string;
+    durationMinutes?: number;
+    caloriesEstimate?: number;
+  }): Promise<{ id: string; userId: string; kind: string; createdAt: string }> {
+    return jsonFetch(`${API_BASE_URL}/activity/workouts`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   },
 };

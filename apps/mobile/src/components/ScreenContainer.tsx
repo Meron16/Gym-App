@@ -25,6 +25,7 @@ export function ScreenContainer({
           style={styles.scroll}
           contentContainerStyle={[styles.content, !padForTabBar && styles.contentNoTab]}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {children}
         </ScrollView>
@@ -38,6 +39,7 @@ export function ScreenContainer({
               styles.contentWithFooter,
             ]}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
             {children}
           </ScrollView>

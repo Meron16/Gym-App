@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import { Throttle } from "@nestjs/throttler";
 import { Request } from "express";
 import { AnalyticsService } from "../analytics/analytics.service";
@@ -78,5 +88,47 @@ export class AdminController {
   @Get("me")
   me(@Req() req: Request & { user?: { sub: string; role: string } }) {
     return req.user ?? null;
+  }
+
+  @Get("trainers")
+  listTrainers() {
+    return this.adminService.listTrainers();
+  }
+
+  @Post("trainers")
+  createTrainer(
+    @Body()
+    body: {
+      gymId: string;
+      name: string;
+      tagline?: string;
+      expertise: string[];
+      availability?: { day: string; slots: string[] }[];
+      photoUrl?: string;
+    },
+  ) {
+    return this.adminService.createTrainer(body);
+  }
+
+  @Patch("trainers/:id")
+  updateTrainer(
+    @Param("id") id: string,
+    @Body()
+    body: Partial<{
+      name: string;
+      tagline: string;
+      expertise: string[];
+      availability: { day: string; slots: string[] }[];
+      photoUrl: string | null;
+      active: boolean;
+      gymId: string;
+    }>,
+  ) {
+    return this.adminService.updateTrainer(id, body);
+  }
+
+  @Delete("trainers/:id")
+  deleteTrainer(@Param("id") id: string) {
+    return this.adminService.deleteTrainer(id);
   }
 }

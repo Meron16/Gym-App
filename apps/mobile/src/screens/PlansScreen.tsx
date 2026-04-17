@@ -47,19 +47,44 @@ export function PlansScreen() {
     }, [load]),
   );
 
+  const openCheckoutUrl = async (checkoutUrl: string) => {
+    if (Platform.OS === "web") {
+      await Linking.openURL(checkoutUrl);
+    } else {
+      await WebBrowser.openBrowserAsync(checkoutUrl, { enableBarCollapsing: true });
+    }
+    void load();
+  };
+
   const openCheckout = async (packageId: string) => {
     try {
       setCheckoutPackageId(packageId);
       track("checkout_started", { package_id: packageId });
-      const { checkoutUrl } = await api.createCheckoutSession(packageId);
-      if (Platform.OS === "web") {
-        await Linking.openURL(checkoutUrl);
-      } else {
-        await WebBrowser.openBrowserAsync(checkoutUrl, { enableBarCollapsing: true });
+      const res = await api.createCheckoutSession(packageId);
+      const checkoutUrl = res.checkoutUrl;
+      const liveCheckout = res.liveCheckout === true;
+
+      if (!liveCheckout) {
+        Alert.alert(
+          "Demo checkout",
+          "Stripe is not fully configured on the server (missing STRIPE_SECRET_KEY and/or a Stripe Price ID). No real charge will occur. Tap Open demo to test in the browser, or configure Stripe in apps/api/.env for live billing.",
+          [
+            { text: "Open demo", onPress: () => void openCheckoutUrl(checkoutUrl) },
+            { text: "Cancel", style: "cancel" },
+          ],
+        );
+        return;
       }
-      void load();
-    } catch {
-      Alert.alert("Checkout failed", "Could not start billing. For real Stripe, configure the API keys and Price IDs.");
+      await openCheckoutUrl(checkoutUrl);
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : String(e);
+      const msg = raw.replace(/^API\s+\d+:\s*/i, "").trim() || raw;
+      Alert.alert(
+        "Checkout failed",
+        msg.includes("401") || msg.toLowerCase().includes("unauthorized")
+          ? "Sign in again — your session may have expired."
+          : `${msg}\n\nIf you expect real Stripe Checkout, configure STRIPE_SECRET_KEY and STRIPE_CHECKOUT_PRICE_ID on the API.`,
+      );
     } finally {
       setCheckoutPackageId(null);
     }

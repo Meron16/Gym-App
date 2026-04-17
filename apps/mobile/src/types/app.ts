@@ -1,4 +1,4 @@
-export type MainTab = "home" | "browse" | "booking" | "activity";
+export type MainTab = "home" | "browse" | "trainers" | "booking" | "activity";
 
 export interface GymItem {
   id: string;
@@ -43,4 +43,39 @@ export interface Package {
   price: string;
   highlights: string[];
   bookingEntitlement: { maxSessionsPerWeek: number };
+}
+
+export interface TrainerSummary {
+  id: string;
+  gymId: string;
+  gymName: string;
+  gymLocation: string;
+  name: string;
+  tagline: string;
+  expertise: string[];
+  availabilitySummary: string;
+  photoUrl?: string;
+}
+
+export interface TrainerDetail extends TrainerSummary {
+  availability: { day: string; slots: string[] }[];
+}
+
+export interface ActivitySummary {
+  userId: string;
+  streakDays: number;
+  sessionsThisWeek: number;
+  gymSessionsThisWeek: number;
+  weeklyBars: number[];
+  weeklyCounts: number[];
+  weeklyLabels: string[];
+  badges: string[];
+  leaderboardPreview: { rank: number; name: string; points: number }[];
+  totalWorkouts: number;
+  stats: {
+    avgHeartRate: number;
+    stepsEstimate: number;
+    sleepHours: number;
+    hydrationLiters: number;
+  };
 }

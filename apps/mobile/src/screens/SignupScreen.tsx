@@ -63,7 +63,17 @@ export function SignupScreen({ onSignup, onGoLogin }: SignupScreenProps) {
       if (useFirebase && err.code?.startsWith("auth/")) {
         setError(mapFirebaseAuthMessage(err.code));
       } else if (e instanceof Error) {
-        setError((e.message ?? "").replace(/^API \d+: /, "") || "Could not create account.");
+        const raw = (e.message ?? "").replace(/^API \d+: /, "");
+        const lower = raw.toLowerCase();
+        if (
+          lower.includes("already exists") ||
+          lower.includes("already in use") ||
+          lower.includes("email-already")
+        ) {
+          setError("This email already has an account. Use Log in below.");
+        } else {
+          setError(raw || "Could not create account.");
+        }
       } else {
         setError("Could not create account. Is the API running?");
       }
@@ -127,7 +137,7 @@ export function SignupScreen({ onSignup, onGoLogin }: SignupScreenProps) {
           label={loading ? "Creating…" : "Create Account"}
           variant="purple"
           onPress={() => void handleCreate()}
-          disabled={loading || !agreed}
+          disabled={loading}
         />
         {loading ? <ActivityIndicator color={colors.lime} /> : null}
         <View style={styles.divider}>

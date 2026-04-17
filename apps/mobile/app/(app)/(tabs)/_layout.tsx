@@ -23,6 +23,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="home" options={{ title: "HOME" }} />
       <Tabs.Screen name="browse" options={{ title: "BROWSE" }} />
+      <Tabs.Screen name="trainers" options={{ title: "COACHES" }} />
       <Tabs.Screen name="plans" options={{ title: "PLANS" }} />
       <Tabs.Screen name="booking" options={{ title: "BOOK" }} />
       <Tabs.Screen name="activity" options={{ title: "PULSE" }} />

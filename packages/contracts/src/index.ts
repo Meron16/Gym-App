@@ -90,4 +90,23 @@ export interface CheckoutSessionRequest {
 export interface CheckoutSessionResponse {
   checkoutUrl: string;
   provider: "stripe";
+  liveCheckout: boolean;
+}
+
+export interface TrainerSummary {
+  id: string;
+  gymId: string;
+  gymName: string;
+  gymLocation: string;
+  name: string;
+  tagline: string;
+  expertise: string[];
+  availabilitySummary: string;
+  photoUrl?: string;
+}
+
+export interface CreateTrainerBookingRequest {
+  trainerId: string;
+  slotId: string;
+  packageId: string;
 }

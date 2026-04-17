@@ -8,11 +8,12 @@ interface BottomNavProps {
   onChange: (next: MainTab) => void;
 }
 
-const items: MainTab[] = ["home", "browse", "booking", "activity"];
+const items: MainTab[] = ["home", "browse", "trainers", "booking", "activity"];
 
 const labels: Record<MainTab, string> = {
   home: "HOME",
   browse: "BROWSE",
+  trainers: "COACHES",
   booking: "BOOK",
   activity: "PULSE",
 };
