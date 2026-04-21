@@ -1,14 +1,19 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 
 const defaultTrainerAvailability = [
-  { day: "Mon", slots: ["06:30", "09:00", "17:30"] },
-  { day: "Tue", slots: ["07:30", "17:30", "19:00"] },
-  { day: "Wed", slots: ["06:30", "09:00", "19:00"] },
-  { day: "Thu", slots: ["07:30", "17:30"] },
-  { day: "Fri", slots: ["06:30", "09:00", "17:30", "19:00"] },
-  { day: "Sat", slots: ["09:00", "11:00"] },
-  { day: "Sun", slots: ["10:00", "12:00"] },
+  { day: 'Mon', slots: ['06:30', '09:00', '17:30'] },
+  { day: 'Tue', slots: ['07:30', '17:30', '19:00'] },
+  { day: 'Wed', slots: ['06:30', '09:00', '19:00'] },
+  { day: 'Thu', slots: ['07:30', '17:30'] },
+  { day: 'Fri', slots: ['06:30', '09:00', '17:30', '19:00'] },
+  { day: 'Sat', slots: ['09:00', '11:00'] },
+  { day: 'Sun', slots: ['10:00', '12:00'] },
 ];
 
 @Injectable()
@@ -35,7 +40,7 @@ export class AdminService {
 
   async listBookings() {
     const rows = await this.prisma.booking.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       take: 200,
     });
     return rows.map((r) => ({
@@ -52,7 +57,7 @@ export class AdminService {
     try {
       const updated = await this.prisma.booking.update({
         where: { id },
-        data: { status: "cancelled" },
+        data: { status: 'cancelled' },
       });
       return {
         id: updated.id,
@@ -63,7 +68,7 @@ export class AdminService {
         createdAt: updated.createdAt.toISOString(),
       };
     } catch {
-      throw new NotFoundException("Booking not found");
+      throw new NotFoundException('Booking not found');
     }
   }
 
@@ -79,11 +84,11 @@ export class AdminService {
     return await this.prisma.gym.create({
       data: {
         name: body.name,
-        location: body.location ?? body.address ?? "Unknown",
-        address: body.address ?? body.location ?? "Unknown",
+        location: body.location ?? body.address ?? 'Unknown',
+        address: body.address ?? body.location ?? 'Unknown',
         rating: 4.2,
-        priceFrom: "$—",
-        tag: "Fitness",
+        priceFrom: '$—',
+        tag: 'Fitness',
         capacityBase: 45,
         amenities: [],
         operatingHours: [],
@@ -96,10 +101,189 @@ export class AdminService {
     });
   }
 
+  async listGymsAdmin() {
+    const rows = await this.prisma.gym.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 500,
+    });
+    return rows.map((g) => this.toGymAdminDto(g));
+  }
+
+  async getGymAdmin(id: string) {
+    const g = await this.prisma.gym.findUnique({ where: { id } });
+    if (!g) {
+      throw new NotFoundException('Gym not found');
+    }
+    return this.toGymAdminDto(g);
+  }
+
+  async updateGymAdmin(
+    id: string,
+    body: Partial<{
+      name: string;
+      location: string;
+      address: string;
+      capacityBase: number;
+      rating: number;
+      priceFrom: string;
+      tag: string;
+      operatingHours: unknown;
+      amenities: unknown;
+      photos: unknown;
+      lat: number;
+      lng: number;
+    }>,
+  ) {
+    try {
+      const g = await this.prisma.gym.update({
+        where: { id },
+        data: {
+          ...(body.name !== undefined ? { name: body.name.trim() } : {}),
+          ...(body.location !== undefined
+            ? { location: body.location.trim() }
+            : {}),
+          ...(body.address !== undefined
+            ? { address: body.address.trim() }
+            : {}),
+          ...(body.capacityBase !== undefined
+            ? { capacityBase: Math.max(1, Math.round(body.capacityBase)) }
+            : {}),
+          ...(body.rating !== undefined ? { rating: body.rating } : {}),
+          ...(body.priceFrom !== undefined
+            ? { priceFrom: body.priceFrom }
+            : {}),
+          ...(body.tag !== undefined ? { tag: body.tag } : {}),
+          ...(body.operatingHours !== undefined
+            ? { operatingHours: body.operatingHours as Prisma.InputJsonValue }
+            : {}),
+          ...(body.amenities !== undefined
+            ? { amenities: body.amenities as Prisma.InputJsonValue }
+            : {}),
+          ...(body.photos !== undefined
+            ? { photos: body.photos as Prisma.InputJsonValue }
+            : {}),
+          ...(body.lat !== undefined ? { lat: body.lat } : {}),
+          ...(body.lng !== undefined ? { lng: body.lng } : {}),
+        },
+      });
+      return this.toGymAdminDto(g);
+    } catch {
+      throw new NotFoundException('Gym not found');
+    }
+  }
+
+  private toGymAdminDto(g: {
+    id: string;
+    name: string;
+    location: string;
+    address: string;
+    rating: number;
+    priceFrom: string;
+    tag: string;
+    capacityBase: number;
+    lat: number;
+    lng: number;
+    amenities: Prisma.JsonValue;
+    operatingHours: Prisma.JsonValue;
+    photos: Prisma.JsonValue;
+    updatedAt: Date;
+  }) {
+    return {
+      id: g.id,
+      name: g.name,
+      location: g.location,
+      address: g.address,
+      rating: g.rating,
+      priceFrom: g.priceFrom,
+      tag: g.tag,
+      capacityBase: g.capacityBase,
+      lat: g.lat,
+      lng: g.lng,
+      amenities: g.amenities,
+      operatingHours: g.operatingHours,
+      photos: g.photos,
+      updatedAt: g.updatedAt.toISOString(),
+    };
+  }
+
+  /** Daily bookings + revenue for dashboard charts */
+  async revenueSummary(days: number) {
+    const safeDays = Math.min(90, Math.max(1, Math.floor(days)));
+    const start = new Date();
+    start.setDate(start.getDate() - safeDays);
+    start.setHours(0, 0, 0, 0);
+
+    const [bookings, payments, gymCount] = await Promise.all([
+      this.prisma.booking.findMany({
+        where: { createdAt: { gte: start } },
+        select: { createdAt: true },
+      }),
+      this.prisma.paymentRecord.findMany({
+        where: { createdAt: { gte: start } },
+        select: { createdAt: true, amountCents: true },
+      }),
+      this.prisma.gym.count(),
+    ]);
+
+    const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+    const bookingByDay = new Map<string, number>();
+    const revenueByDay = new Map<string, number>();
+
+    const daily: { date: string; bookings: number; revenueCents: number }[] =
+      [];
+    for (let i = 0; i < safeDays; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const k = dayKey(d);
+      bookingByDay.set(k, 0);
+      revenueByDay.set(k, 0);
+      daily.push({ date: k, bookings: 0, revenueCents: 0 });
+    }
+
+    for (const b of bookings) {
+      const k = dayKey(b.createdAt);
+      if (bookingByDay.has(k)) {
+        bookingByDay.set(k, (bookingByDay.get(k) ?? 0) + 1);
+      }
+    }
+    for (const p of payments) {
+      const k = dayKey(p.createdAt);
+      if (revenueByDay.has(k)) {
+        revenueByDay.set(k, (revenueByDay.get(k) ?? 0) + p.amountCents);
+      }
+    }
+
+    for (let i = 0; i < daily.length; i++) {
+      const row = daily[i];
+      row.bookings = bookingByDay.get(row.date) ?? 0;
+      row.revenueCents = revenueByDay.get(row.date) ?? 0;
+    }
+
+    const totalBookings = bookings.length;
+    const occupancyHint =
+      gymCount > 0 && totalBookings > 0
+        ? Math.min(
+            100,
+            Math.round((totalBookings / (gymCount * safeDays)) * 100),
+          )
+        : 0;
+
+    return {
+      days: safeDays,
+      since: start.toISOString(),
+      daily,
+      totals: {
+        bookings: totalBookings,
+        revenueCents: payments.reduce((s, p) => s + p.amountCents, 0),
+      },
+      occupancyIndexPercent: occupancyHint,
+    };
+  }
+
   async listTrainers() {
     const rows = await this.prisma.trainer.findMany({
       include: { gym: { select: { name: true, location: true } } },
-      orderBy: { updatedAt: "desc" },
+      orderBy: { updatedAt: 'desc' },
       take: 200,
     });
     return rows.map((r) => ({
@@ -124,15 +308,17 @@ export class AdminService {
   }) {
     const gym = await this.prisma.gym.findUnique({ where: { id: body.gymId } });
     if (!gym) {
-      throw new NotFoundException("Gym not found");
+      throw new NotFoundException('Gym not found');
     }
     return await this.prisma.trainer.create({
       data: {
         gymId: body.gymId,
         name: body.name.trim(),
-        tagline: body.tagline?.trim() ?? "",
+        tagline: body.tagline?.trim() ?? '',
         expertise: body.expertise ?? [],
-        availability: body.availability?.length ? body.availability : defaultTrainerAvailability,
+        availability: body.availability?.length
+          ? body.availability
+          : defaultTrainerAvailability,
         photoUrl: body.photoUrl?.trim() || null,
         active: true,
       },
@@ -156,16 +342,22 @@ export class AdminService {
         where: { id },
         data: {
           ...(body.name !== undefined ? { name: body.name.trim() } : {}),
-          ...(body.tagline !== undefined ? { tagline: body.tagline.trim() } : {}),
-          ...(body.expertise !== undefined ? { expertise: body.expertise } : {}),
-          ...(body.availability !== undefined ? { availability: body.availability } : {}),
+          ...(body.tagline !== undefined
+            ? { tagline: body.tagline.trim() }
+            : {}),
+          ...(body.expertise !== undefined
+            ? { expertise: body.expertise }
+            : {}),
+          ...(body.availability !== undefined
+            ? { availability: body.availability }
+            : {}),
           ...(body.photoUrl !== undefined ? { photoUrl: body.photoUrl } : {}),
           ...(body.active !== undefined ? { active: body.active } : {}),
           ...(body.gymId !== undefined ? { gymId: body.gymId } : {}),
         },
       });
     } catch {
-      throw new NotFoundException("Trainer not found");
+      throw new NotFoundException('Trainer not found');
     }
   }
 
@@ -174,13 +366,30 @@ export class AdminService {
       await this.prisma.trainer.delete({ where: { id } });
       return { ok: true };
     } catch {
-      throw new NotFoundException("Trainer not found");
+      throw new NotFoundException('Trainer not found');
     }
+  }
+
+  async listPackages() {
+    const rows = await this.prisma.package.findMany({
+      orderBy: { name: 'asc' },
+      take: 200,
+    });
+    return rows.map((p) => ({
+      id: p.id,
+      name: p.name,
+      billing: p.billing,
+      priceCents: p.priceCents,
+      maxSessions: p.maxSessions,
+      maxSessionsPerWeek: p.maxSessionsPerWeek,
+      highlights: p.highlights,
+      stripePriceId: p.stripePriceId,
+    }));
   }
 
   async createPackage(body: {
     name: string;
-    billing: "daily" | "weekly" | "monthly" | "annual";
+    billing: 'daily' | 'weekly' | 'monthly' | 'annual';
     priceCents: number;
     maxSessions?: number;
     highlights?: string[];
@@ -198,6 +407,130 @@ export class AdminService {
         stripePriceId: body.stripePriceId?.trim() || null,
       },
     });
+  }
+
+  async listUsersAdmin(query?: {
+    q?: string;
+    role?: 'user' | 'operator' | 'admin';
+    limit?: number;
+  }) {
+    const q = (query?.q ?? '').trim().toLowerCase();
+    const limit = Math.min(500, Math.max(1, query?.limit ?? 100));
+    const rows = await this.prisma.user.findMany({
+      where: {
+        ...(query?.role ? { role: query.role } : {}),
+        ...(q
+          ? {
+              OR: [
+                { email: { contains: q, mode: 'insensitive' } },
+                { displayName: { contains: q, mode: 'insensitive' } },
+                { phone: { contains: q } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        phone: true,
+        firebaseUid: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    return rows.map((r) => ({
+      ...r,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    }));
+  }
+
+  async getUserAdmin(id: string) {
+    const row = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        phone: true,
+        firebaseUid: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    if (!row) {
+      throw new NotFoundException('User not found');
+    }
+    return {
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  }
+
+  async updateUserAdmin(
+    id: string,
+    body: Partial<{
+      displayName: string | null;
+      phone: string | null;
+      role: 'user' | 'operator' | 'admin';
+    }>,
+  ) {
+    if (!Object.keys(body).length) {
+      throw new BadRequestException('No fields provided');
+    }
+    if (body.role && body.role !== 'admin') {
+      const target = await this.prisma.user.findUnique({
+        where: { id },
+        select: { role: true },
+      });
+      if (!target) throw new NotFoundException('User not found');
+      if (target.role === 'admin') {
+        const adminCount = await this.prisma.user.count({
+          where: { role: 'admin' },
+        });
+        if (adminCount <= 1) {
+          throw new BadRequestException('Cannot demote the last admin');
+        }
+      }
+    }
+
+    try {
+      const row = await this.prisma.user.update({
+        where: { id },
+        data: {
+          ...(body.displayName !== undefined
+            ? { displayName: body.displayName?.trim() || null }
+            : {}),
+          ...(body.phone !== undefined
+            ? { phone: body.phone?.trim() || null }
+            : {}),
+          ...(body.role !== undefined ? { role: body.role } : {}),
+        },
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          phone: true,
+          firebaseUid: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      return {
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      };
+    } catch {
+      throw new NotFoundException('User not found');
+    }
   }
 }
 

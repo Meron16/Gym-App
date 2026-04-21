@@ -1,5 +1,10 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { PrismaClient } from "@prisma/client";
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
 
 /**
  * Neon pooler + Prisma: add pooling hints so we don't exhaust connections (P2024)
@@ -8,12 +13,17 @@ import { PrismaClient } from "@prisma/client";
 function augmentDatabaseUrlForNeon(raw: string): string {
   try {
     const u = new URL(raw);
-    if (!u.hostname.includes("neon.tech")) return raw;
-    if (!u.searchParams.has("pgbouncer")) u.searchParams.set("pgbouncer", "true");
-    if (!u.searchParams.has("connect_timeout")) u.searchParams.set("connect_timeout", "30");
-    if (!u.searchParams.has("pool_timeout")) u.searchParams.set("pool_timeout", "30");
-    if (!u.searchParams.has("connection_limit")) u.searchParams.set("connection_limit", "5");
-    if (!u.searchParams.has("sslmode")) u.searchParams.set("sslmode", "require");
+    if (!u.hostname.includes('neon.tech')) return raw;
+    if (!u.searchParams.has('pgbouncer'))
+      u.searchParams.set('pgbouncer', 'true');
+    if (!u.searchParams.has('connect_timeout'))
+      u.searchParams.set('connect_timeout', '30');
+    if (!u.searchParams.has('pool_timeout'))
+      u.searchParams.set('pool_timeout', '60');
+    if (!u.searchParams.has('connection_limit'))
+      u.searchParams.set('connection_limit', '15');
+    if (!u.searchParams.has('sslmode'))
+      u.searchParams.set('sslmode', 'require');
     return u.toString();
   } catch {
     return raw;
@@ -21,8 +31,13 @@ function augmentDatabaseUrlForNeon(raw: string): string {
 }
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly log = new Logger(PrismaService.name);
+  private reconnecting: Promise<void> | null = null;
+  private heartbeat: NodeJS.Timeout | null = null;
 
   constructor() {
     const raw = process.env.DATABASE_URL;
@@ -40,16 +55,63 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       try {
         await this.$connect();
+        this.startHeartbeat();
         return;
       } catch (e) {
         last = e;
-        this.log.warn(`Database connect failed (will retry): ${(e as Error).message}`);
+        this.log.warn(
+          `Database connect failed (will retry): ${(e as Error).message}`,
+        );
       }
     }
     throw last;
   }
 
   async onModuleDestroy() {
+    this.stopHeartbeat();
     await this.$disconnect();
+  }
+
+  private startHeartbeat() {
+    if (this.heartbeat) return;
+    this.heartbeat = setInterval(() => {
+      void (async () => {
+        try {
+          await this.$queryRawUnsafe('SELECT 1');
+        } catch (e) {
+          this.log.warn(
+            `Database heartbeat failed, reconnecting: ${(e as Error).message}`,
+          );
+          try {
+            await this.reconnect();
+          } catch (reconnectError) {
+            this.log.warn(
+              `Database reconnect attempt failed: ${(reconnectError as Error).message}`,
+            );
+          }
+        }
+      })();
+    }, 30000);
+    this.heartbeat.unref?.();
+  }
+
+  private stopHeartbeat() {
+    if (!this.heartbeat) return;
+    clearInterval(this.heartbeat);
+    this.heartbeat = null;
+  }
+
+  private async reconnect() {
+    if (!this.reconnecting) {
+      this.reconnecting = (async () => {
+        try {
+          await this.$disconnect().catch(() => undefined);
+          await this.$connect();
+        } finally {
+          this.reconnecting = null;
+        }
+      })();
+    }
+    await this.reconnecting;
   }
 }

@@ -1,8 +1,8 @@
-import { Module } from "@nestjs/common";
-import { AuthModule } from "../auth/auth.module";
-import { EntitlementsService } from "./entitlements.service";
-import { PackagesController } from "./packages.controller";
-import { PackagesService } from "./packages.service";
+import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
+import { EntitlementsService } from './entitlements.service';
+import { PackagesController } from './packages.controller';
+import { PackagesService } from './packages.service';
 
 @Module({
   imports: [AuthModule],
@@ -11,4 +11,3 @@ import { PackagesService } from "./packages.service";
   exports: [PackagesService, EntitlementsService],
 })
 export class PackagesModule {}
-

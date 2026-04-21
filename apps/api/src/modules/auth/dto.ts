@@ -4,7 +4,7 @@ export interface FirebaseLoginRequestDto {
 
 export interface AuthProfileDto {
   id: string;
-  role: "user" | "operator" | "admin";
+  role: 'user' | 'operator' | 'admin';
   email?: string;
 }
 
@@ -25,4 +25,3 @@ export interface LoginRequestDto {
   email: string;
   password: string;
 }
-

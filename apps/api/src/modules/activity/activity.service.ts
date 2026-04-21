@@ -1,10 +1,11 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { BADGE_CATALOG } from './badge-catalog';
 
 function isoDateUTC(d: Date): string {
   const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
@@ -34,12 +35,15 @@ function streakFromWorkoutDays(daysWithWorkout: Set<string>): number {
   return streak;
 }
 
-function last7DayCountsUtc(workouts: { createdAt: Date }[], now: Date): number[] {
+function last7DayCountsUtc(
+  workouts: { createdAt: Date }[],
+  now: Date,
+): number[] {
   const keys: string[] = [];
   for (let i = 6; i >= 0; i--) {
     keys.push(isoDateUTC(addDaysUtc(now, -i)));
   }
-  const counts = new Array(7).fill(0);
+  const counts: number[] = Array.from({ length: 7 }, () => 0);
   const keyToIndex = new Map<string, number>();
   keys.forEach((k, i) => keyToIndex.set(k, i));
   for (const w of workouts) {
@@ -50,14 +54,18 @@ function last7DayCountsUtc(workouts: { createdAt: Date }[], now: Date): number[]
   return counts;
 }
 
-function computeBadges(streak: number, totalWorkouts: number, weekCount: number): string[] {
-  const badges: string[] = [];
-  if (totalWorkouts >= 1) badges.push("First Step");
-  if (streak >= 3) badges.push("On Fire");
-  if (streak >= 7) badges.push("Week Warrior");
-  if (weekCount >= 5) badges.push("Volume King");
-  if (totalWorkouts >= 20) badges.push("Committed");
-  return badges.length ? badges : ["Start your streak"];
+function buildBadgeShelf(
+  streak: number,
+  totalWorkouts: number,
+  weekWorkouts: number,
+) {
+  const ctx = { streak, totalWorkouts, weekWorkouts };
+  return BADGE_CATALOG.map((b) => ({
+    id: b.id,
+    title: b.title,
+    description: b.description,
+    unlocked: b.unlocked(ctx),
+  }));
 }
 
 @Injectable()
@@ -66,18 +74,24 @@ export class ActivityService {
 
   async logWorkout(
     userId: string,
-    body: { kind?: string; durationMinutes?: number; caloriesEstimate?: number },
+    body: {
+      kind?: string;
+      durationMinutes?: number;
+      caloriesEstimate?: number;
+    },
   ) {
     return this.prisma.workoutEvent.create({
       data: {
         userId,
-        kind: body.kind?.trim() || "workout",
+        kind: body.kind?.trim() || 'workout',
         durationMinutes:
-          typeof body.durationMinutes === "number" && Number.isFinite(body.durationMinutes)
+          typeof body.durationMinutes === 'number' &&
+          Number.isFinite(body.durationMinutes)
             ? Math.max(0, Math.round(body.durationMinutes))
             : null,
         caloriesEstimate:
-          typeof body.caloriesEstimate === "number" && Number.isFinite(body.caloriesEstimate)
+          typeof body.caloriesEstimate === 'number' &&
+          Number.isFinite(body.caloriesEstimate)
             ? Math.max(0, Math.round(body.caloriesEstimate))
             : null,
       },
@@ -90,7 +104,7 @@ export class ActivityService {
 
     const workouts = await this.prisma.workoutEvent.findMany({
       where: { userId },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
       take: 800,
     });
 
@@ -100,7 +114,9 @@ export class ActivityService {
     }
     const streakDays = streakFromWorkoutDays(daysSet);
 
-    const weekWorkouts = workouts.filter((w) => w.createdAt >= sinceWeek).length;
+    const weekWorkouts = workouts.filter(
+      (w) => w.createdAt >= sinceWeek,
+    ).length;
     const totalWorkouts = workouts.length;
 
     const weeklyCounts = last7DayCountsUtc(workouts, now);
@@ -108,12 +124,15 @@ export class ActivityService {
     const weeklyBars = weeklyCounts.map((c) => Math.min(1, c / maxC));
 
     const gymSessions = await this.prisma.booking.count({
-      where: { userId, status: "confirmed", createdAt: { gte: sinceWeek } },
+      where: { userId, status: 'confirmed', createdAt: { gte: sinceWeek } },
     });
 
-    const badges = computeBadges(streakDays, totalWorkouts, weekWorkouts);
+    const badgeShelf = buildBadgeShelf(streakDays, totalWorkouts, weekWorkouts);
+    const badgesUnlocked = badgeShelf
+      .filter((b) => b.unlocked)
+      .map((b) => b.title);
 
-    const leaderboardPreview = await this.leaderboardPreview();
+    const leaderboardPreview = await this.leaderboardPreview(userId);
 
     return {
       userId,
@@ -126,11 +145,17 @@ export class ActivityService {
         const labels: string[] = [];
         for (let i = 6; i >= 0; i--) {
           const d = addDaysUtc(now, -i);
-          labels.push(d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }));
+          labels.push(
+            d.toLocaleDateString('en-US', {
+              weekday: 'short',
+              timeZone: 'UTC',
+            }),
+          );
         }
         return labels;
       })(),
-      badges,
+      badges: badgesUnlocked,
+      badgeShelf,
       leaderboardPreview,
       totalWorkouts,
       stats: {
@@ -142,24 +167,36 @@ export class ActivityService {
     };
   }
 
-  private async leaderboardPreview() {
+  private async leaderboardPreview(currentUserId: string) {
     const since = addDaysUtc(new Date(), -30);
     since.setUTCHours(0, 0, 0, 0);
     const grouped = await this.prisma.workoutEvent.groupBy({
-      by: ["userId"],
+      by: ['userId'],
       where: { createdAt: { gte: since } },
       _count: { id: true },
     });
-    const sorted = grouped.sort((a, b) => b._count.id - a._count.id).slice(0, 5);
+    const sortedAll = grouped.sort((a, b) => b._count.id - a._count.id);
+    const sorted = sortedAll.slice(0, 8);
     const users = await this.prisma.user.findMany({
       where: { id: { in: sorted.map((s) => s.userId) } },
       select: { id: true, displayName: true, email: true },
     });
-    const nameById = new Map(users.map((u) => [u.id, u.displayName?.trim() || u.email?.split("@")[0] || "Athlete"]));
-    return sorted.map((row, i) => ({
+    const nameById = new Map(
+      users.map((u) => [
+        u.id,
+        u.displayName?.trim() || u.email?.split('@')[0] || 'Athlete',
+      ]),
+    );
+    const rows = sorted.map((row, i) => ({
       rank: i + 1,
-      name: nameById.get(row.userId) ?? "Athlete",
+      name: nameById.get(row.userId) ?? 'Athlete',
       points: 800 + row._count.id * 45,
+      isYou: row.userId === currentUserId,
     }));
+    const yourIndex = sortedAll.findIndex((r) => r.userId === currentUserId);
+    const yourRank = yourIndex >= 0 ? yourIndex + 1 : null;
+    const yourPoints =
+      yourIndex >= 0 ? 800 + sortedAll[yourIndex]._count.id * 45 : null;
+    return { rows, yourRank, yourPoints };
   }
 }

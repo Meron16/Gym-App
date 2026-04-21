@@ -1,6 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import * as admin from "firebase-admin";
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as admin from 'firebase-admin';
 
 @Injectable()
 export class FirebaseAdminService implements OnModuleInit {
@@ -10,9 +10,9 @@ export class FirebaseAdminService implements OnModuleInit {
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit() {
-    const projectId = this.config.get<string>("firebase.projectId");
-    const clientEmail = this.config.get<string>("firebase.clientEmail");
-    const privateKey = this.config.get<string>("firebase.privateKey");
+    const projectId = this.config.get<string>('firebase.projectId');
+    const clientEmail = this.config.get<string>('firebase.clientEmail');
+    const privateKey = this.config.get<string>('firebase.privateKey');
 
     if (projectId && clientEmail && privateKey) {
       try {
@@ -27,13 +27,13 @@ export class FirebaseAdminService implements OnModuleInit {
         } else {
           this.app = admin.app();
         }
-        this.log.log("Firebase Admin initialized");
+        this.log.log('Firebase Admin initialized');
       } catch (e) {
         this.log.warn(`Firebase Admin failed to init: ${(e as Error).message}`);
         this.app = null;
       }
     } else {
-      this.log.log("Firebase Admin skipped (set FIREBASE_* env when ready)");
+      this.log.log('Firebase Admin skipped (set FIREBASE_* env when ready)');
     }
   }
 
@@ -43,7 +43,7 @@ export class FirebaseAdminService implements OnModuleInit {
 
   async verifyIdToken(idToken: string): Promise<admin.auth.DecodedIdToken> {
     if (!this.app) {
-      throw new Error("Firebase Admin not configured");
+      throw new Error('Firebase Admin not configured');
     }
     return this.app.auth().verifyIdToken(idToken);
   }

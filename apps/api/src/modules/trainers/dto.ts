@@ -29,7 +29,7 @@ export interface TrainerAvailabilityResponseDto {
   slots: TrainerBookingSlotDto[];
 }
 
-export type TrainerBookingStatus = "confirmed" | "cancelled";
+export type TrainerBookingStatus = 'confirmed' | 'cancelled';
 
 export interface TrainerBookingDto {
   id: string;

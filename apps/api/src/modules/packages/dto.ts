@@ -1,7 +1,7 @@
 export interface PackageDto {
   id: string;
   name: string;
-  billing: "daily" | "weekly" | "monthly" | "annual";
+  billing: 'daily' | 'weekly' | 'monthly' | 'annual';
   price: string;
   highlights: string[];
   bookingEntitlement: {
@@ -13,4 +13,3 @@ export interface PackagesResponseDto {
   packages: PackageDto[];
   activePackageId?: string;
 }
-

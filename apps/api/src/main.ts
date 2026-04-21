@@ -1,7 +1,8 @@
-import { ConfigService } from "@nestjs/config";
-import { NestFactory } from "@nestjs/core";
-import * as Sentry from "@sentry/node";
-import { AppModule } from "./app.module";
+import { ConfigService } from '@nestjs/config';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
+import * as Sentry from '@sentry/node';
+import { SentryGlobalFilter } from './common/filters/sentry-global.filter';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   if (process.env.SENTRY_DSN) {
@@ -12,10 +13,16 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create(AppModule, { rawBody: true });
+
+  if (process.env.SENTRY_DSN) {
+    const { httpAdapter } = app.get(HttpAdapterHost);
+    app.useGlobalFilters(new SentryGlobalFilter(httpAdapter));
+  }
+
   const config = app.get(ConfigService);
 
-  const corsOrigins = (process.env.CORS_ORIGINS ?? "")
-    .split(",")
+  const corsOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
 
@@ -24,8 +31,8 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const port = config.get<number>("port") ?? 3001;
+  const port = config.get<number>('port') ?? 3001;
   await app.listen(port);
 }
 
-bootstrap();
+void bootstrap();

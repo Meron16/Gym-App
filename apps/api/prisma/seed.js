@@ -1,4 +1,5 @@
 const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcryptjs");
 
 const prisma = new PrismaClient();
 
@@ -118,6 +119,25 @@ const defaultTrainerAvailability = [
 ];
 
 async function main() {
+  const adminEmail = "admin@gym.local";
+  const adminPassword = "Admin123!";
+  const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
+
+  await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {
+      role: "admin",
+      passwordHash: adminPasswordHash,
+      displayName: "Gym Admin",
+    },
+    create: {
+      email: adminEmail,
+      role: "admin",
+      passwordHash: adminPasswordHash,
+      displayName: "Gym Admin",
+    },
+  });
+
   for (const gym of gyms) {
     await prisma.gym.upsert({
       where: { osmId: gym.osmId },

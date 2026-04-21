@@ -1,6 +1,6 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../../prisma/prisma.service";
-import { PackageDto, PackagesResponseDto } from "./dto";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { PackageDto, PackagesResponseDto } from './dto';
 
 @Injectable()
 export class PackagesService {
@@ -8,14 +8,19 @@ export class PackagesService {
 
   async list(): Promise<PackagesResponseDto> {
     const rows = await this.prisma.package.findMany({
-      orderBy: { priceCents: "asc" },
+      orderBy: { priceCents: 'asc' },
     });
     const packages: PackageDto[] = rows.map((row) => ({
       id: row.id,
       name: row.name,
-      billing: row.billing as PackageDto["billing"],
+      billing: row.billing as PackageDto['billing'],
       price: `$${(row.priceCents / 100).toFixed(0)}`,
-      highlights: (Array.isArray(row.highlights) ? row.highlights : []).map((x) => String(x)),
+      highlights: (Array.isArray(row.highlights) ? row.highlights : []).map(
+        (x): string =>
+          typeof x === 'string'
+            ? x
+            : (JSON.stringify(x) ?? Object.prototype.toString.call(x)),
+      ),
       bookingEntitlement: { maxSessionsPerWeek: row.maxSessionsPerWeek },
     }));
     return { packages, activePackageId: undefined };
@@ -25,10 +30,9 @@ export class PackagesService {
     const base = await this.list();
     const sub = await this.prisma.subscription.findFirst({
       where: { userId, active: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
-    const activePackageId = sub?.packageId ?? base.packages[0]?.id;
+    const activePackageId = sub?.packageId;
     return { ...base, activePackageId };
   }
 }
-

@@ -1,19 +1,19 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
-import type { Request } from "express";
-import { JwtAuthGuard, JwtUser } from "../auth/jwt-auth.guard";
-import { ActivityService } from "./activity.service";
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
+import { JwtAuthGuard, JwtUser } from '../auth/jwt-auth.guard';
+import { ActivityService } from './activity.service';
 
-@Controller("activity")
+@Controller('activity')
 export class ActivityController {
   constructor(private readonly activityService: ActivityService) {}
 
-  @Get("summary")
+  @Get('summary')
   @UseGuards(JwtAuthGuard)
   summary(@Req() req: Request & { user: JwtUser }) {
     return this.activityService.summary(req.user.sub);
   }
 
-  @Post("workouts")
+  @Post('workouts')
   @UseGuards(JwtAuthGuard)
   logWorkout(
     @Req() req: Request & { user: JwtUser },
@@ -27,8 +27,11 @@ export class ActivityController {
     return this.activityService.logWorkout(req.user.sub, body);
   }
 
-  @Get("wearable")
+  @Get('wearable')
   wearableStub() {
-    return { connected: false, message: "Wearable linking ships in a later release." };
+    return {
+      connected: false,
+      message: 'Wearable linking ships in a later release.',
+    };
   }
 }

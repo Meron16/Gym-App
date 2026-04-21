@@ -1,6 +1,6 @@
-import { Module } from "@nestjs/common";
-import { GymsController } from "./gyms.controller";
-import { GymsService } from "./gyms.service";
+import { Module } from '@nestjs/common';
+import { GymsController } from './gyms.controller';
+import { GymsService } from './gyms.service';
 
 @Module({
   controllers: [GymsController],
@@ -8,4 +8,3 @@ import { GymsService } from "./gyms.service";
   exports: [GymsService],
 })
 export class GymsModule {}
-

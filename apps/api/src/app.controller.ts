@@ -1,9 +1,9 @@
-import { Controller, Get } from "@nestjs/common";
-import { SkipThrottle } from "@nestjs/throttler";
-import { PrismaService } from "./prisma/prisma.service";
+import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
+import { PrismaService } from './prisma/prisma.service';
 
 @SkipThrottle()
-@Controller("health")
+@Controller('health')
 export class AppController {
   constructor(private readonly prisma: PrismaService) {}
 
@@ -16,6 +16,6 @@ export class AppController {
     } catch {
       database = false;
     }
-    return { status: "ok", database };
+    return { status: 'ok', database };
   }
 }

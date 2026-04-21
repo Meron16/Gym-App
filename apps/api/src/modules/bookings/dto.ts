@@ -25,7 +25,7 @@ export interface CreateBookingDto {
   packageId: string;
 }
 
-export type BookingStatus = "pending" | "confirmed" | "cancelled" | "completed";
+export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
 export interface BookingDto {
   id: string;

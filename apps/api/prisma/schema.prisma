@@ -167,3 +167,26 @@ model WorkoutEvent {
 
   @@index([userId, createdAt])
 }
+
+/** Stripe webhook idempotency — safe replays */
+model ProcessedStripeEvent {
+  id              String   @id @default(cuid())
+  stripeEventId   String   @unique
+  eventType       String?
+  createdAt       DateTime @default(now())
+}
+
+/** Minimal audit trail for admin / sensitive actions */
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  resource   String
+  metadata   Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
+}

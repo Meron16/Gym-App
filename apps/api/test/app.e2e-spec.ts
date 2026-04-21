@@ -1,10 +1,12 @@
-import { INestApplication } from "@nestjs/common";
-import { Test, TestingModule } from "@nestjs/testing";
-import request from "supertest";
-import { App } from "supertest/types";
-import { AppModule } from "./../src/app.module";
+import { INestApplication } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import request from 'supertest';
+import { App } from 'supertest/types';
+import { AppModule } from './../src/app.module';
 
-describe("Health (e2e)", () => {
+type HealthResponse = { status: string };
+
+describe('Health (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
@@ -20,12 +22,13 @@ describe("Health (e2e)", () => {
     await app.close();
   });
 
-  it("/health (GET)", () => {
+  it('/health (GET)', () => {
     return request(app.getHttpServer())
-      .get("/health")
+      .get('/health')
       .expect(200)
       .expect((res) => {
-        expect(res.body.status).toBe("ok");
+        const body = res.body as HealthResponse;
+        expect(body.status).toBe('ok');
       });
   });
 });

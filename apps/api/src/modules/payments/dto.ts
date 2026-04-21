@@ -6,7 +6,7 @@ export interface CheckoutSessionRequestDto {
 
 export interface CheckoutSessionResponseDto {
   checkoutUrl: string;
-  provider: "stripe";
+  provider: 'stripe';
   /** False when STRIPE_SECRET_KEY / Price ID are missing or Stripe errored — URL is a demo placeholder, not real Checkout. */
   liveCheckout: boolean;
 }

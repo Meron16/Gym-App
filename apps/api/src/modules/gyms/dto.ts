@@ -28,4 +28,3 @@ export interface GymSearchQueryDto {
   /** Optional radius filter in kilometers when lat/lng are provided. */
   radiusKm?: number;
 }
-

@@ -7,22 +7,22 @@ import {
   Post,
   Req,
   UseGuards,
-} from "@nestjs/common";
-import type { Request } from "express";
-import { SkipThrottle, Throttle } from "@nestjs/throttler";
-import { JwtAuthGuard, JwtUser } from "../auth/jwt-auth.guard";
+} from '@nestjs/common';
+import type { Request } from 'express';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { JwtAuthGuard, JwtUser } from '../auth/jwt-auth.guard';
 import type {
   CheckoutSessionRequestDto,
   CheckoutSessionResponseDto,
   PaymentHistoryItemDto,
-} from "./dto";
-import { PaymentsService } from "./payments.service";
+} from './dto';
+import { PaymentsService } from './payments.service';
 
-@Controller("payments")
+@Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
-  @Post("checkout-session")
+  @Post('checkout-session')
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   checkoutSession(
@@ -32,18 +32,20 @@ export class PaymentsController {
     return this.paymentsService.createCheckoutSession(dto, req.user.sub);
   }
 
-  @Get("history")
+  @Get('history')
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 60, ttl: 60000 } })
-  history(@Req() req: Request & { user: JwtUser }): Promise<PaymentHistoryItemDto[]> {
+  history(
+    @Req() req: Request & { user: JwtUser },
+  ): Promise<PaymentHistoryItemDto[]> {
     return this.paymentsService.getPaymentHistory(req.user.sub);
   }
 
-  @Post("webhook")
+  @Post('webhook')
   @SkipThrottle()
   @HttpCode(200)
   async stripeWebhook(
-    @Headers("stripe-signature") signature: string | undefined,
+    @Headers('stripe-signature') signature: string | undefined,
     @Req() req: Request & { rawBody?: Buffer },
   ) {
     const raw = req.rawBody ?? Buffer.from(JSON.stringify(req.body ?? {}));

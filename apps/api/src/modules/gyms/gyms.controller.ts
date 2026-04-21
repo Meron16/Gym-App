@@ -1,8 +1,8 @@
-import { Controller, Get, Query, Param } from "@nestjs/common";
-import { GymsService } from "./gyms.service";
-import type { GymDetailDto, GymSearchQueryDto, GymSummaryDto } from "./dto";
+import { Controller, Get, Query, Param } from '@nestjs/common';
+import { GymsService } from './gyms.service';
+import type { GymDetailDto, GymSearchQueryDto, GymSummaryDto } from './dto';
 
-@Controller("gyms")
+@Controller('gyms')
 export class GymsController {
   constructor(private readonly gymsService: GymsService) {}
 
@@ -11,9 +11,8 @@ export class GymsController {
     return this.gymsService.search(query);
   }
 
-  @Get(":id")
-  detail(@Param("id") id: string): Promise<GymDetailDto> {
+  @Get(':id')
+  detail(@Param('id') id: string): Promise<GymDetailDto> {
     return this.gymsService.detail(id);
   }
 }
-
