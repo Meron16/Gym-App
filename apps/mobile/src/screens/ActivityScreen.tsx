@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,6 +19,46 @@ import { api } from "../services/apiClient";
 import { getAccessToken } from "../services/sessionStore";
 import type { ActivitySummary } from "../types/app";
 import { colors } from "../theme/tokens";
+import { motion } from "../theme/motion";
+
+function useFadeIn(delayMs: number) {
+  const useNativeDriver = Platform.OS !== "web";
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translate = useRef(new Animated.Value(12)).current;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: motion.cardDuration,
+          useNativeDriver,
+        }),
+        Animated.timing(translate, {
+          toValue: 0,
+          duration: motion.cardDuration,
+          useNativeDriver,
+        }),
+      ]).start();
+    }, delayMs);
+    return () => clearTimeout(t);
+  }, [delayMs, opacity, translate]);
+  return { opacity, translate };
+}
+
+function FadeSection({
+  children,
+  delay = 0,
+  style,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  style?: object;
+}) {
+  const { opacity, translate } = useFadeIn(delay);
+  return (
+    <Animated.View style={[style, { opacity, transform: [{ translateY: translate }] }]}>{children}</Animated.View>
+  );
+}
 
 export function ActivityScreen() {
   const [data, setData] = useState<ActivitySummary | null>(null);
@@ -64,6 +106,11 @@ export function ActivityScreen() {
     return data.weeklyLabels;
   }, [data]);
 
+  const chartAnimKey = useMemo(() => {
+    if (!data?.weeklyCounts?.length) return "empty";
+    return data.weeklyCounts.join("-");
+  }, [data]);
+
   const logQuickWorkout = () => {
     void (async () => {
       try {
@@ -77,6 +124,25 @@ export function ActivityScreen() {
       }
     })();
   };
+
+  const lp = data?.leaderboardPreview;
+  const leaderboardRows =
+    lp && "rows" in lp
+      ? lp.rows
+      : Array.isArray(lp)
+        ? lp.map((r) => ({ ...r, isYou: false }))
+        : [];
+  const yourRank = lp && "yourRank" in lp ? lp.yourRank : null;
+  const yourPoints = lp && "yourPoints" in lp ? lp.yourPoints : null;
+
+  const badgeShelf =
+    data?.badgeShelf ??
+    (data?.badges ?? []).map((t) => ({
+      id: t.toLowerCase().replace(/\s+/g, "_"),
+      title: t,
+      description: "",
+      unlocked: true,
+    }));
 
   return (
     <ScreenContainer>
@@ -96,93 +162,121 @@ export function ActivityScreen() {
         </GlassCard>
       ) : data ? (
         <>
-          <GlassCard style={styles.ringCard}>
-            <View style={styles.streakRow}>
-              <Text style={styles.streakLabel}>Streak</Text>
-              <Text style={styles.streakValue}>{data.streakDays} days</Text>
-            </View>
-            <ProgressRing
-              progress={progress}
-              label={`${Math.round(progress * 100)}%`}
-              sublabel="weekly session goal"
-            />
-            <View style={styles.ringMeta}>
-              <Text style={styles.metaLabel}>Workouts logged</Text>
-              <Text style={styles.metaValue}>{data.totalWorkouts}</Text>
-            </View>
-            <Text style={styles.metaHint}>
-              Gym sessions this week: {data.gymSessionsThisWeek} · Logged workouts: {data.sessionsThisWeek}
-            </Text>
-          </GlassCard>
+          <FadeSection delay={0}>
+            <GlassCard style={styles.ringCard}>
+              <View style={styles.streakRow}>
+                <Text style={styles.streakLabel}>Streak</Text>
+                <Text style={styles.streakValue}>{data.streakDays} days</Text>
+              </View>
+              <ProgressRing
+                progress={progress}
+                label={`${Math.round(progress * 100)}%`}
+                sublabel="weekly session goal"
+              />
+              <View style={styles.ringMeta}>
+                <Text style={styles.metaLabel}>Workouts logged</Text>
+                <Text style={styles.metaValue}>{data.totalWorkouts}</Text>
+              </View>
+              <Text style={styles.metaHint}>
+                Gym sessions this week: {data.gymSessionsThisWeek} · Logged workouts: {data.sessionsThisWeek}
+              </Text>
+            </GlassCard>
+          </FadeSection>
 
-          <View style={styles.actions}>
+          <FadeSection delay={40} style={styles.actions}>
             <GlowButton
               label={logging ? "Logging…" : "Log a workout"}
               onPress={logQuickWorkout}
               disabled={logging}
             />
-          </View>
+          </FadeSection>
 
-          <View style={styles.grid}>
-            <GlassCard style={styles.statTile}>
-              <Text style={styles.statIcon}>♥</Text>
-              <Text style={styles.statValue}>{data.stats.avgHeartRate}</Text>
-              <Text style={styles.statLabel}>Avg BPM (est.)</Text>
-            </GlassCard>
-            <GlassCard style={styles.statTile}>
-              <Text style={styles.statIcon}>👟</Text>
-              <Text style={styles.statValue}>{data.stats.stepsEstimate.toLocaleString()}</Text>
-              <Text style={styles.statLabel}>Steps (est.)</Text>
-            </GlassCard>
-            <GlassCard style={styles.statTile}>
-              <Text style={styles.statIcon}>☾</Text>
-              <Text style={styles.statValue}>{data.stats.sleepHours.toFixed(1)}h</Text>
-              <Text style={styles.statLabel}>Sleep (est.)</Text>
-            </GlassCard>
-            <GlassCard style={styles.statTile}>
-              <Text style={styles.statIcon}>💧</Text>
-              <Text style={styles.statValue}>{data.stats.hydrationLiters.toFixed(1)}L</Text>
-              <Text style={styles.statLabel}>Hydration (est.)</Text>
-            </GlassCard>
-          </View>
+          <FadeSection delay={80}>
+            <View style={styles.grid}>
+              <GlassCard style={styles.statTile}>
+                <Text style={styles.statIcon}>♥</Text>
+                <Text style={styles.statValue}>{data.stats.avgHeartRate}</Text>
+                <Text style={styles.statLabel}>Avg BPM (est.)</Text>
+              </GlassCard>
+              <GlassCard style={styles.statTile}>
+                <Text style={styles.statIcon}>👟</Text>
+                <Text style={styles.statValue}>{data.stats.stepsEstimate.toLocaleString()}</Text>
+                <Text style={styles.statLabel}>Steps (est.)</Text>
+              </GlassCard>
+              <GlassCard style={styles.statTile}>
+                <Text style={styles.statIcon}>☾</Text>
+                <Text style={styles.statValue}>{data.stats.sleepHours.toFixed(1)}h</Text>
+                <Text style={styles.statLabel}>Sleep (est.)</Text>
+              </GlassCard>
+              <GlassCard style={styles.statTile}>
+                <Text style={styles.statIcon}>💧</Text>
+                <Text style={styles.statValue}>{data.stats.hydrationLiters.toFixed(1)}L</Text>
+                <Text style={styles.statLabel}>Hydration (est.)</Text>
+              </GlassCard>
+            </View>
+          </FadeSection>
 
-          <GlassCard>
-            <Text style={styles.sectionTitle}>Badges</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badgeRow}>
-              {data.badges.map((b) => (
-                <View key={b} style={styles.badge}>
-                  <Text style={styles.badgeText}>{b}</Text>
+          <FadeSection delay={120}>
+            <GlassCard>
+              <Text style={styles.sectionTitle}>Badges</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.badgeRow}>
+                {badgeShelf.map((b) => (
+                  <View
+                    key={b.id}
+                    style={[styles.badge, b.unlocked ? styles.badgeUnlocked : styles.badgeLocked]}
+                  >
+                    <Text style={[styles.badgeTitle, !b.unlocked && styles.badgeTitleMuted]}>{b.title}</Text>
+                    <Text style={styles.badgeDesc}>{b.description}</Text>
+                    {!b.unlocked ? <Text style={styles.badgeLock}>🔒</Text> : null}
+                  </View>
+                ))}
+              </ScrollView>
+            </GlassCard>
+          </FadeSection>
+
+          <FadeSection delay={160}>
+            <GlassCard>
+              <Text style={styles.sectionTitle}>Leaderboard preview</Text>
+              {yourRank != null && yourPoints != null ? (
+                <Text style={styles.lbYou}>
+                  Your rank: #{yourRank} · {yourPoints} pts
+                </Text>
+              ) : null}
+              {leaderboardRows.map((row) => (
+                <View
+                  key={`${row.rank}-${row.name}`}
+                  style={[styles.lbRow, row.isYou && styles.lbRowYou]}
+                >
+                  <Text style={styles.lbRank}>#{row.rank}</Text>
+                  <Text style={styles.lbName}>
+                    {row.name}
+                    {row.isYou ? " · you" : ""}
+                  </Text>
+                  <Text style={styles.lbPts}>{row.points} pts</Text>
                 </View>
               ))}
-            </ScrollView>
-          </GlassCard>
+            </GlassCard>
+          </FadeSection>
 
-          <GlassCard>
-            <Text style={styles.sectionTitle}>Leaderboard preview</Text>
-            {data.leaderboardPreview.map((row) => (
-              <View key={row.rank} style={styles.lbRow}>
-                <Text style={styles.lbRank}>#{row.rank}</Text>
-                <Text style={styles.lbName}>{row.name}</Text>
-                <Text style={styles.lbPts}>{row.points} pts</Text>
-              </View>
-            ))}
-          </GlassCard>
+          <FadeSection delay={200}>
+            <GlassCard>
+              <Text style={styles.sectionTitle}>Last 7 days</Text>
+              <ActivityBarChart key={chartAnimKey} values={chartValues} labels={chartLabels} />
+            </GlassCard>
+          </FadeSection>
 
-          <GlassCard>
-            <Text style={styles.sectionTitle}>Last 7 days</Text>
-            <ActivityBarChart values={chartValues} labels={chartLabels} />
-          </GlassCard>
-
-          <GlassCard>
-            <Text style={styles.sectionTitle}>Wearables</Text>
-            <Text style={styles.muted}>
-              Apple Health / Google Fit connection is stubbed for now — your manual logs still power streaks and
-              charts.
-            </Text>
-            <Pressable onPress={() => Alert.alert("Coming soon", "Device sync lands after MVP hardening.")}>
-              <Text style={styles.link}>Learn more</Text>
-            </Pressable>
-          </GlassCard>
+          <FadeSection delay={240}>
+            <GlassCard>
+              <Text style={styles.sectionTitle}>Wearables</Text>
+              <Text style={styles.muted}>
+                Apple Health / Google Fit connection is stubbed for now — your manual logs still power streaks and
+                charts.
+              </Text>
+              <Pressable onPress={() => Alert.alert("Coming soon", "Device sync lands after MVP hardening.")}>
+                <Text style={styles.link}>Learn more</Text>
+              </Pressable>
+            </GlassCard>
+          </FadeSection>
         </>
       ) : null}
     </ScreenContainer>
@@ -214,14 +308,24 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.text, fontWeight: "800", fontSize: 16, marginBottom: 10 },
   badgeRow: { gap: 10, paddingVertical: 4 },
   badge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+    width: 148,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
     backgroundColor: colors.cardSoft,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  badgeText: { color: colors.lime, fontWeight: "800", fontSize: 12 },
+  badgeUnlocked: {
+    borderColor: colors.lime,
+    backgroundColor: "rgba(180, 255, 80, 0.08)",
+  },
+  badgeLocked: { opacity: 0.72 },
+  badgeTitle: { color: colors.lime, fontWeight: "800", fontSize: 13 },
+  badgeTitleMuted: { color: colors.textMuted },
+  badgeDesc: { color: colors.textMuted, fontSize: 11, marginTop: 4, lineHeight: 14 },
+  badgeLock: { position: "absolute", top: 8, right: 8, fontSize: 12 },
+  lbYou: { color: colors.purple, fontWeight: "700", fontSize: 13, marginBottom: 8 },
   lbRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -229,6 +333,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
+  },
+  lbRowYou: {
+    backgroundColor: "rgba(180, 255, 80, 0.06)",
+    marginHorizontal: -12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderTopWidth: 0,
   },
   lbRank: { color: colors.textMuted, width: 36, fontWeight: "700" },
   lbName: { color: colors.text, flex: 1, fontWeight: "700" },

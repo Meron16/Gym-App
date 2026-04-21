@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet } from "react-native";
+import { Animated, Platform, StyleSheet } from "react-native";
 import { motion } from "../theme/motion";
 
 interface AnimatedScreenProps {
@@ -8,6 +8,7 @@ interface AnimatedScreenProps {
 }
 
 export function AnimatedScreen({ screenKey, children }: AnimatedScreenProps) {
+  const useNativeDriver = Platform.OS !== "web";
   const fade = useRef(new Animated.Value(0)).current;
   const shift = useRef(new Animated.Value(12)).current;
 
@@ -18,12 +19,12 @@ export function AnimatedScreen({ screenKey, children }: AnimatedScreenProps) {
       Animated.timing(fade, {
         toValue: 1,
         duration: motion.pageDuration,
-        useNativeDriver: true,
+        useNativeDriver,
       }),
       Animated.timing(shift, {
         toValue: 0,
         duration: motion.pageDuration,
-        useNativeDriver: true,
+        useNativeDriver,
       }),
     ]).start();
   }, [fade, shift, screenKey]);

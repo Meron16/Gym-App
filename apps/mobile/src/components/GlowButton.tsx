@@ -1,6 +1,7 @@
 import React, { useRef } from "react";
 import {
   Animated,
+  Platform,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -25,13 +26,14 @@ export function GlowButton({
   disabled,
   style,
 }: GlowButtonProps) {
+  const useNativeDriver = Platform.OS !== "web";
   const scale = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () => {
     Animated.timing(scale, {
       toValue: 0.97,
       duration: motion.pressInDuration,
-      useNativeDriver: true,
+      useNativeDriver,
     }).start();
   };
 
@@ -39,7 +41,7 @@ export function GlowButton({
     Animated.timing(scale, {
       toValue: 1,
       duration: motion.pressOutDuration,
-      useNativeDriver: true,
+      useNativeDriver,
     }).start();
   };
 
@@ -78,21 +80,29 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.45,
-    shadowOpacity: 0,
+    ...(Platform.OS === "web" ? { boxShadow: "none" } : { shadowOpacity: 0 }),
   },
   lime: {
     backgroundColor: colors.lime,
-    shadowColor: colors.lime,
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 2 },
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 2px 16px rgba(180,255,80,0.22)" }
+      : {
+          shadowColor: colors.lime,
+          shadowOpacity: 0.22,
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: 2 },
+        }),
   },
   purple: {
     backgroundColor: colors.purple,
-    shadowColor: colors.purpleDeep,
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 2 },
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 2px 14px rgba(102,67,166,0.22)" }
+      : {
+          shadowColor: colors.purpleDeep,
+          shadowOpacity: 0.2,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 2 },
+        }),
   },
   label: { fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.7 },
   limeText: { color: colors.limeText },

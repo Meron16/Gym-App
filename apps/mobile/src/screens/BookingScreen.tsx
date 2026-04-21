@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { EmptyState } from "../components/EmptyState";
 import { GlassCard } from "../components/GlassCard";
 import { GlowButton } from "../components/GlowButton";
@@ -33,6 +33,7 @@ function formatSlotTime(iso: string) {
 }
 
 export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
+  const useNativeDriver = Platform.OS !== "web";
   const [step, setStep] = useState(0);
   const [packages, setPackages] = useState<Package[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
@@ -152,12 +153,12 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
         Animated.timing(opacity, {
           toValue: 0,
           duration: motion.pageDuration * 0.55,
-          useNativeDriver: true,
+          useNativeDriver,
         }),
         Animated.timing(translateY, {
           toValue: -10,
           duration: motion.pageDuration * 0.55,
-          useNativeDriver: true,
+          useNativeDriver,
         }),
       ]).start(() => {
         setStep(nextStep);
@@ -166,12 +167,12 @@ export function BookingScreen({ gymId, onDone }: BookingScreenProps) {
           Animated.timing(opacity, {
             toValue: 1,
             duration: motion.pageDuration,
-            useNativeDriver: true,
+            useNativeDriver,
           }),
           Animated.timing(translateY, {
             toValue: 0,
             duration: motion.pageDuration,
-            useNativeDriver: true,
+            useNativeDriver,
           }),
         ]).start();
       });

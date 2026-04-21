@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View, ViewStyle } from "react-native";
+import { Animated, Platform, StyleSheet, View, ViewStyle } from "react-native";
 import { colors } from "../theme/tokens";
 
 interface SkeletonBoxProps {
@@ -10,13 +10,14 @@ interface SkeletonBoxProps {
 }
 
 export function SkeletonBox({ height, width = "100%", style, radius = 12 }: SkeletonBoxProps) {
+  const useNativeDriver = Platform.OS !== "web";
   const opacity = useRef(new Animated.Value(0.35)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.85, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.35, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.85, duration: 700, useNativeDriver }),
+        Animated.timing(opacity, { toValue: 0.35, duration: 700, useNativeDriver }),
       ]),
     );
     loop.start();

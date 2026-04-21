@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
+import { Platform, StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
 import { colors, radius } from "../theme/tokens";
 
 interface InputFieldProps extends TextInputProps {
@@ -50,9 +50,13 @@ const styles = StyleSheet.create({
   },
   inputFocused: {
     borderColor: colors.lime,
-    shadowColor: colors.lime,
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 0 },
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0px 0px 12px rgba(180,255,80,0.25)" }
+      : {
+          shadowColor: colors.lime,
+          shadowOpacity: 0.25,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 0 },
+        }),
   },
 });

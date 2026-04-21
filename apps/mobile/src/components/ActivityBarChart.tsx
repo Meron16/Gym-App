@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme/tokens";
 import { motion } from "../theme/motion";
 
@@ -22,21 +22,23 @@ export function ActivityBarChart({ values, labels }: ActivityBarChartProps) {
 
   const dayLabels = labels?.length === 7 ? labels : DEFAULT_LABELS;
 
-  const anims = useRef(v.map(() => new Animated.Value(0))).current;
+  const anims = useRef(Array.from({ length: 7 }, () => new Animated.Value(0))).current;
+  const animVersion = useMemo(() => v.join(","), [v]);
 
   useEffect(() => {
-    if (anims.length !== v.length) return;
+    anims.forEach((a) => a.setValue(0));
     Animated.stagger(
       45,
       anims.map((a) =>
         Animated.timing(a, {
           toValue: 1,
           duration: motion.cardDuration,
+          easing: Easing.out(Easing.cubic),
           useNativeDriver: false,
         }),
       ),
     ).start();
-  }, [anims, v]);
+  }, [animVersion, anims]);
 
   const peak = v.indexOf(Math.max(...v));
 
@@ -48,7 +50,7 @@ export function ActivityBarChart({ values, labels }: ActivityBarChartProps) {
       </Text>
       <View style={styles.chart}>
         {v.map((height, i) => {
-          const animH = anims[Math.min(i, anims.length - 1)]!;
+          const animH = anims[i]!;
           const barHeight = animH.interpolate({
             inputRange: [0, 1],
             outputRange: [4, 4 + height * 72],

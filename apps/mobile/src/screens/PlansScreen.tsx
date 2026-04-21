@@ -53,8 +53,19 @@ export function PlansScreen() {
     } else {
       await WebBrowser.openBrowserAsync(checkoutUrl, { enableBarCollapsing: true });
     }
-    void load();
+    // Stripe webhook processing can finish a bit after browser returns.
+    // Poll briefly so "Current" plan badge updates without requiring manual refresh.
+    await refreshUntilSubscriptionSettles();
   };
+
+  const refreshUntilSubscriptionSettles = useCallback(async () => {
+    const attempts = 6;
+    const delayMs = 1500;
+    for (let i = 0; i < attempts; i += 1) {
+      await load();
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }, [load]);
 
   const openCheckout = async (packageId: string) => {
     try {

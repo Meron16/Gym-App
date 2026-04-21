@@ -61,6 +61,20 @@ export interface TrainerDetail extends TrainerSummary {
   availability: { day: string; slots: string[] }[];
 }
 
+export interface BadgeShelfItem {
+  id: string;
+  title: string;
+  description: string;
+  unlocked: boolean;
+}
+
+export interface LeaderboardRow {
+  rank: number;
+  name: string;
+  points: number;
+  isYou?: boolean;
+}
+
 export interface ActivitySummary {
   userId: string;
   streakDays: number;
@@ -69,8 +83,17 @@ export interface ActivitySummary {
   weeklyBars: number[];
   weeklyCounts: number[];
   weeklyLabels: string[];
+  /** Unlocked badge titles (compact) */
   badges: string[];
-  leaderboardPreview: { rank: number; name: string; points: number }[];
+  badgeShelf?: BadgeShelfItem[];
+  /** New shape: nested object. Legacy: flat array (older API). */
+  leaderboardPreview:
+    | {
+        rows: LeaderboardRow[];
+        yourRank: number | null;
+        yourPoints: number | null;
+      }
+    | LeaderboardRow[];
   totalWorkouts: number;
   stats: {
     avgHeartRate: number;
